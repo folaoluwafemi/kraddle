@@ -43,6 +43,15 @@
           <a class="nav-link" href="#truth">Truth and evidence</a>
           <a class="nav-link" href="#identity">Identity and scope</a>
 
+          <p class="nav-heading">ARCHITECTURE</p>
+          <a class="nav-link" href="#terminology">Terminology map</a>
+          <a class="nav-link" href="#planes">Architectural planes</a>
+          <a class="nav-link" href="#profiles">Profile catalog</a>
+          <a class="nav-link" href="#profile-definition">Profile definition</a>
+          <a class="nav-link" href="#precision">Precision gradient</a>
+          <a class="nav-link" href="#compiler">Meaning compiler</a>
+          <a class="nav-link" href="#design-work">Remaining design work</a>
+
           <p class="nav-heading">FORMAT SPECIFICATION</p>
           <a class="nav-link" href="#format">Directory layout</a>
           <a class="nav-link" href="#records">Records</a>
@@ -54,6 +63,7 @@
           <p class="nav-heading">OPERATIONS</p>
           <a class="nav-link" href="#extraction">Extraction</a>
           <a class="nav-link" href="#synchronization">Synchronization</a>
+          <a class="nav-link" href="#control-loop">Closed control loop</a>
           <a class="nav-link" href="#invariants">Format invariants</a>
         </nav>
       </aside>
@@ -104,6 +114,7 @@
           <p class="eyebrow">START HERE</p>
           <h1>Quickstart</h1>
           <p class="lead">Model one behavior, connect it to implementation, and attach evidence.</p>
+          <div class="warning"><span>!</span><p><strong>Illustrative syntax.</strong> No Kraddle CLI or readable source language is implemented yet. This walkthrough demonstrates the intended semantics only.</p></div>
           <div class="steps">
             <article><span>1</span><div><h3>Initialize the workspace</h3><p>Kraddle creates the project-native directory.</p><pre><code>kraddle init</code><button class="copy-button" aria-label="Copy code">Copy</button></pre></div></article>
             <article><span>2</span><div><h3>Capture a commitment</h3><pre><code>unit u1 behavior "Resume investigation"
@@ -141,7 +152,7 @@ observe u2 output "ResearchContext"</code><button class="copy-button" aria-label
           <h1>Truth and evidence</h1>
           <p class="lead">Kraddle never turns a plausible interpretation into an accepted truth silently.</p>
           <div class="status-list">
-            <div><span class="status observed">observed</span><p>Directly present in code, runtime behavior, or user input.</p></div>
+            <div><span class="status observed">observed</span><p>Directly present in code or runtime behavior. For user input, observation establishes that the statement was made, not that its content is true.</p></div>
             <div><span class="status derived">derived</span><p>Computed from observations using an explicit rule.</p></div>
             <div><span class="status inferred">inferred</span><p>A plausible interpretation of available evidence.</p></div>
             <div><span class="status accepted">accepted</span><p>Explicitly approved by an actor or trusted policy.</p></div>
@@ -162,6 +173,141 @@ signature fingerprint
 structural fingerprint
 source revision</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
           <p>After each scan, an anchor remap is marked exact, probable, ambiguous, or broken. Commitments never move across an ambiguous remap without confirmation.</p>
+        </section>
+
+        <section class="doc-section" id="terminology" data-title="Terminology map">
+          <p class="eyebrow">ARCHITECTURE / REFERENCE</p>
+          <h1>Terminology map</h1>
+          <p class="lead">The terms describe different kinds of abstraction. They are not competing names for the same thing.</p>
+          <div class="property-table">
+            <div><code>Format</code><span>The complete normative contract for representing and operating Kraddle meaning.</span></div>
+            <div><code>Kernel</code><span>The five physical primitives everything else is composed from.</span></div>
+            <div><code>Vocabulary</code><span>Named kinds, modalities, relationships, states, and operations.</span></div>
+            <div><code>Profile</code><span>A validated arrangement of kernel records representing one recurring concept.</span></div>
+            <div><code>Envelope</code><span>A profile whose job is to declare a context, resource, or authority boundary.</span></div>
+            <div><code>Event</code><span>An immutable change to canonical state.</span></div>
+            <div><code>Projection</code><span>A task-specific view of canonical meaning for a human or agent.</span></div>
+            <div><code>Plane</code><span>A conceptual subsystem grouped by responsibility. It is not a stored record.</span></div>
+            <div><code>Runtime</code><span>The machinery that resolves, executes, observes, evaluates, and responds.</span></div>
+          </div>
+          <h2 id="hierarchy">How the terms fit</h2>
+          <pre><code>Kraddle Format
+├── Kernel records
+├── Vocabulary
+├── Profile definitions
+│   └── Envelopes are boundary profiles
+├── Events and storage
+├── Projections
+└── Runtime semantics
+
+Planes group runtime responsibilities conceptually.</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
+        </section>
+
+        <section class="doc-section" id="planes" data-title="Architectural planes">
+          <p class="eyebrow">ARCHITECTURE</p><h1>Architectural planes</h1>
+          <p class="lead">A plane is a responsibility boundary, not another primitive or file type.</p>
+          <div class="card-grid">
+            <article class="feature-card"><span class="card-number">01</span><h3>Semantic plane</h3><p>Preserves meaning, relationships, evidence, scope, and history.</p></article>
+            <article class="feature-card"><span class="card-number">02</span><h3>Control plane</h3><p>Resolves applicability, context, authority, proof obligations, and responses.</p></article>
+            <article class="feature-card"><span class="card-number">03</span><h3>Execution and observation</h3><p>Performs bounded actions and emits observations and attestations.</p></article>
+            <article class="feature-card"><span class="card-number">04</span><h3>Evaluation plane</h3><p>Compares resulting reality against commitments and qualifies the result.</p></article>
+          </div>
+          <div class="meaning-flow">
+            <div><span class="flow-index">01</span><strong>Control</strong><small>Authorizes</small></div><span class="flow-arrow">→</span>
+            <div><span class="flow-index">02</span><strong>Execution</strong><small>Acts</small></div><span class="flow-arrow">→</span>
+            <div><span class="flow-index">03</span><strong>Evaluation</strong><small>Judges</small></div><span class="flow-arrow">→</span>
+            <div><span class="flow-index">04</span><strong>Semantic</strong><small>Preserves</small></div>
+          </div>
+        </section>
+
+        <section class="doc-section" id="profiles" data-title="Profile catalog">
+          <p class="eyebrow">ARCHITECTURE</p><h1>Profile catalog</h1>
+          <p class="lead">Profiles standardize important concepts without expanding the five-record kernel.</p>
+          <div class="property-table">
+            <div><code>DecisionProfile</code><span>Choice, rejected alternatives, rationale, assumptions, owner, and reevaluation triggers.</span></div>
+            <div><code>ProtocolProfile</code><span>States, events, transitions, guards, temporal properties, failure, and recovery.</span></div>
+            <div><code>EnvelopeProfile</code><span>Quantitative budget, operating conditions, observation window, and breach behavior.</span></div>
+            <div><code>NegativeKnowledge</code><span>Prohibitions, non-goals, and rejected alternatives with active conditions.</span></div>
+            <div><code>ControlBinding</code><span>Connects a commitment to applicability, evaluation, authority, and response.</span></div>
+            <div><code>ContextEnvelope</code><span>Declares what context is complete for, omitted, stale, or unavailable.</span></div>
+            <div><code>AuthorityGrant</code><span>Declares who may perform which operations over which scopes.</span></div>
+            <div><code>ExecutionEpisode</code><span>One bounded attempt to change reality.</span></div>
+            <div><code>EvaluationProfile</code><span>Qualified result, coverage, evidence, blind spots, and freshness.</span></div>
+            <div><code>ExceptionProfile</code><span>Scoped, authorized, justified, and expiring risk acceptance.</span></div>
+          </div>
+          <div class="note"><span class="note-icon">i</span><div><strong>Current maturity: conceptual</strong><p>The next specification task is the ProfileDefinition metamodel and exact kernel mapping.</p></div></div>
+        </section>
+
+        <section class="doc-section" id="profile-definition" data-title="Profile definition">
+          <p class="eyebrow">ARCHITECTURE / SPECIFICATION</p><h1>Profile definition</h1>
+          <p class="lead">A profile is not a new primitive. It is a validated arrangement of the five kernel records.</p>
+          <pre><code>Profile instance
+  = one root Unit
+  + role-bearing Commitments
+  + role-bearing Relationships
+  + supporting Evidence
+  + one or more Scopes
+
+profile_id = root_unit_id</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
+          <div class="property-table">
+            <div><code>ProfileDefinition</code><span>Versioned schema for a profile's root kind, roles, fields, cardinalities, lifecycle, validation, and projections.</span></div>
+            <div><code>owned</code><span>Created for the profile. History remains after profile deletion.</span></div>
+            <div><code>referenced</code><span>Existing record linked by the profile. The profile cannot delete it.</span></div>
+            <div><code>shared</code><span>Record may participate in multiple profiles, each with explicit scope.</span></div>
+          </div>
+          <h2 id="profile-atomicity">Atomicity</h2>
+          <p>Profile operations append one transaction containing all required kernel changes. Readers see the previous valid profile or the next valid profile, never a half-applied bundle.</p>
+          <pre><code>create_profile → propose → accept → activate
+                                      ↓
+                              complete / supersede / invalidate / abort</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
+          <div class="note"><span class="note-icon">i</span><div><strong>Phase 0 target</strong><p>ControlBinding, EvaluationProfile, and ExecutionEpisode are the first profiles required to prove the model.</p></div></div>
+        </section>
+
+        <section class="doc-section" id="precision" data-title="Precision gradient">
+          <p class="eyebrow">ARCHITECTURE</p><h1>Precision gradient</h1>
+          <p class="lead">Meaning becomes only as formal as its risk and control needs require.</p>
+          <ol class="invariant-list">
+            <li><span>R0</span><p><strong>Exploratory.</strong> Feeling, aspiration, or unresolved thought.</p></li>
+            <li><span>R1</span><p><strong>Descriptive.</strong> Scoped human-readable statement.</p></li>
+            <li><span>R2</span><p><strong>Structured.</strong> Typed conditions, effects, thresholds, and exceptions.</p></li>
+            <li><span>R3</span><p><strong>Evaluatable.</strong> A protocol can return a qualified result.</p></li>
+            <li><span>R4</span><p><strong>Executable.</strong> A test, analyzer, monitor, rule, or review procedure exists.</p></li>
+            <li><span>R5</span><p><strong>Enforced.</strong> Failure gates, restricts, blocks, or escalates action.</p></li>
+          </ol>
+          <p>Rigor is independent of truth, approval, satisfaction, freshness, and confidence.</p>
+        </section>
+
+        <section class="doc-section" id="compiler" data-title="Meaning compiler">
+          <p class="eyebrow">ARCHITECTURE</p><h1>Meaning compiler</h1>
+          <p class="lead">The compiler maps consequential meaning to the strongest appropriate evaluator or guardrail.</p>
+          <pre><code>source commitment
+  → operationalization claim
+  → compiler or evaluator adapter
+  → generated or linked control artifact
+  → validation and activation
+  → evidence production
+  → invalidation and recompilation</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
+          <div class="relationship-columns">
+            <article><span class="relation-label">POSSIBLE OUTPUTS</span><h3>Deterministic or runtime</h3><code>type / schema</code><code>architecture rule</code><code>property test</code><code>protocol check</code><code>runtime monitor</code><code>sandbox limit</code></article>
+            <article><span class="relation-label">HUMAN OR HYBRID</span><h3>Judgment protocols</h3><code>review rubric</code><code>scenario checklist</code><code>comparative reference</code><code>sampling policy</code><code>escalation condition</code></article>
+          </div>
+          <div class="warning"><span>!</span><p>The operational proxy never replaces the original meaning. Determinism does not imply soundness, coverage, or continued proxy validity.</p></div>
+        </section>
+
+        <section class="doc-section" id="design-work" data-title="Remaining design work">
+          <p class="eyebrow">ARCHITECTURE / ROADMAP</p><h1>Remaining design work</h1>
+          <p class="lead">Seven dependent specifications turn the current grammar into something implementable and falsifiable.</p>
+          <ol class="principle-list">
+            <li><strong>1. Profile metamodel</strong><span>Define exact mappings, roles, cardinalities, validation, queries, and migrations.</span></li>
+            <li><strong>2. Identity and atomicity</strong><span>Make multi-record profiles visible and synchronized as one valid transaction.</span></li>
+            <li><strong>3. Typed invalidation</strong><span>Separate epistemic, applicability, rationale, authority, realization, selector, and proxy dependencies.</span></li>
+            <li><strong>4. Evaluation lifecycle</strong><span>Specify satisfied, violated, unknown, indeterminate, and evaluation-failed semantics.</span></li>
+            <li><strong>5. Response resolution</strong><span>Resolve what follows violation, unknown state, stale evidence, conflict, or failed evaluation.</span></li>
+            <li><strong>6. Compilation lifecycle</strong><span>Preserve the chain from source meaning to activated guardrail and evidence.</span></li>
+            <li><strong>7. Conformance suite</strong><span>Run a deliberately adversarial closed-loop change and prevent silent control loss.</span></li>
+          </ol>
+          <h2 id="completion-template">Completion template</h2>
+          <p>Each design is complete only when it defines normative semantics, kernel realization, schema, lifecycle, operations, projections, and conformance tests.</p>
         </section>
 
         <section class="doc-section" id="format" data-title="Directory layout">
@@ -187,7 +333,9 @@ source revision</code><button class="copy-button" aria-label="Copy code">Copy</b
             <div><code>record_id</code><span class="type">id128</span><span>Stable workspace-unique identity.</span></div>
             <div><code>scope_id</code><span class="type">id128?</span><span>Scope where the record applies.</span></div>
             <div><code>origin</code><span class="type">enum</span><span>Human, extractor, agent, policy, or import.</span></div>
-            <div><code>status</code><span class="type">enum</span><span>Observed, inferred, proposed, accepted, and others.</span></div>
+            <div><code>epistemic_basis</code><span class="type">enum</span><span>Observed, derived, interpreted, or asserted.</span></div>
+            <div><code>approval_state</code><span class="type">enum</span><span>Proposed, accepted, rejected, or superseded.</span></div>
+            <div><code>freshness_state</code><span class="type">enum</span><span>Current, stale, or expired.</span></div>
             <div><code>properties</code><span class="type">map</span><span>Type-specific fields encoded by numeric schema IDs.</span></div>
           </div>
         </section>
@@ -197,7 +345,7 @@ source revision</code><button class="copy-button" aria-label="Copy code">Copy</b
           <p class="lead">First-class typed connections explain both realization across levels and cooperation among peers.</p>
           <div class="relationship-columns">
             <article><span class="relation-label">VERTICAL</span><h3>Across abstraction</h3><code>realized_by</code><code>implemented_by</code><code>decomposed_into</code><code>constrained_by</code><code>verified_by</code></article>
-            <article><span class="relation-label">HORIZONTAL</span><h3>Within a level</h3><code>depends_on</code><code>collaborates_with</code><code>shares_state_with</code><code>precedes</code><code>conflicts_with</code></article>
+            <article><span class="relation-label">HORIZONTAL</span><h3>Within a level</h3><code>depends_on</code><code>collaborates_with</code><code>shares_state_with</code><code>precedes</code><code>alternative_to</code><code>conflicts_with</code></article>
           </div>
         </section>
 
@@ -216,6 +364,7 @@ schema_version    encoding schema</code><button class="copy-button" aria-label="
         <section class="doc-section" id="encoding" data-title="Binary encoding">
           <p class="eyebrow">FORMAT SPECIFICATION</p><h1>Binary encoding</h1>
           <p class="lead">KRD is a deterministic, framed binary container designed for compactness and forward compatibility.</p>
+          <div class="warning"><span>!</span><p><strong>Conceptual byte layout.</strong> KRD/KRI encoding is not implemented or verified. The semantic metamodel takes priority over binary optimization.</p></div>
           <div class="byte-layout">
             <div><span>0–3</span><strong>Magic</strong><code>4B 52 44 00</code></div>
             <div><span>4</span><strong>Major</strong><code>uint8</code></div>
@@ -256,6 +405,29 @@ schema_version    encoding schema</code><button class="copy-button" aria-label="
           </ol>
         </section>
 
+        <section class="doc-section" id="control-loop" data-title="Closed control loop">
+          <p class="eyebrow">OPERATIONS</p><h1>Closed control loop</h1>
+          <p class="lead">Meaning governs one bounded act, evidence qualifies the result, and response closes or redirects the loop.</p>
+          <pre><code>human intent
+  → semantic model
+  → accepted commitment
+  → control binding
+  → context and authority envelope
+  → execution episode
+  → observation
+  → evaluation
+  → response
+  → invalidation and reevaluation
+  → reconciled meaning and reality</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
+          <div class="status-list">
+            <div><span class="status accepted">satisfied</span><p>The declared evaluator established the commitment within its coverage boundary.</p></div>
+            <div><span class="status stale">violated</span><p>Current evidence establishes a contradiction.</p></div>
+            <div><span class="status inferred">unknown</span><p>No current evaluation establishes a result.</p></div>
+            <div><span class="status derived">indeterminate</span><p>Available evidence cannot support a decisive result.</p></div>
+            <div><span class="status stale">evaluation_failed</span><p>The required evaluator could not complete correctly. This is never a pass.</p></div>
+          </div>
+        </section>
+
         <section class="doc-section" id="invariants" data-title="Format invariants">
           <p class="eyebrow">REFERENCE</p><h1>Format invariants</h1>
           <p class="lead">Rules every conforming Kraddle implementation must preserve.</p>
@@ -266,6 +438,14 @@ schema_version    encoding schema</code><button class="copy-button" aria-label="
             <li><span>04</span><p>Every observation names its source revision and extractor version.</p></li>
             <li><span>05</span><p>Conflicting accepted meaning is never silently discarded.</p></li>
             <li><span>06</span><p>Indexes are rebuildable and contain no unique meaning.</p></li>
+            <li><span>07</span><p>Approval, evaluation, freshness, epistemic basis, rigor, and confidence remain independent.</p></li>
+            <li><span>08</span><p>Every controlled execution declares scope, base revision, effects, and delegated authority.</p></li>
+            <li><span>09</span><p>An actor cannot alter its governing controls without explicit delegated authority.</p></li>
+            <li><span>10</span><p>Stale inputs invalidate dependent evaluations and context envelopes.</p></li>
+            <li><span>11</span><p>Exceptions preserve rationale, authority, scope, compensating controls, and expiration.</p></li>
+            <li><span>12</span><p>Completion requires evidence for every declared proof obligation.</p></li>
+            <li><span>13</span><p>No result is called successful when a required evaluator failed or did not run.</p></li>
+            <li><span>14</span><p>Every context completeness claim discloses omissions, unavailable sources, and blind spots.</p></li>
           </ol>
         </section>
 
