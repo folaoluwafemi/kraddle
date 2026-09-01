@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="The Kraddle Format documentation." />
+    <title>Kraddle Format</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#overview" aria-label="Kraddle Format home">
+        <span class="brand-mark"><span></span><span></span><span></span></span>
+        <span>kraddle</span>
+        <span class="format-label">FORMAT</span>
+      </a>
+      <button class="search-trigger" id="searchTrigger" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" /></svg>
+        <span>Search documentation</span>
+        <kbd>Ctrl K</kbd>
+      </button>
+      <nav class="top-links" aria-label="Primary">
+        <a href="#format">Format v0</a>
+        <a class="button" href="#quickstart">Quickstart</a>
+      </nav>
+      <button class="menu-button" id="menuButton" aria-label="Open navigation" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </header>
+
+    <div class="docs-shell">
+      <aside class="sidebar" id="sidebar">
+        <nav aria-label="Documentation">
+          <p class="nav-heading">START HERE</p>
+          <a class="nav-link active" href="#overview">Overview</a>
+          <a class="nav-link" href="#quickstart">Quickstart</a>
+
+          <p class="nav-heading">CORE CONCEPTS</p>
+          <a class="nav-link" href="#meaning-model">Meaning model</a>
+          <a class="nav-link" href="#truth">Truth and evidence</a>
+          <a class="nav-link" href="#identity">Identity and scope</a>
+
+          <p class="nav-heading">FORMAT SPECIFICATION</p>
+          <a class="nav-link" href="#format">Directory layout</a>
+          <a class="nav-link" href="#records">Records</a>
+          <a class="nav-link" href="#relationships">Relationships</a>
+          <a class="nav-link" href="#events">Events and history</a>
+          <a class="nav-link" href="#encoding">Binary encoding</a>
+          <a class="nav-link" href="#indexes">Objects and indexes</a>
+
+          <p class="nav-heading">OPERATIONS</p>
+          <a class="nav-link" href="#extraction">Extraction</a>
+          <a class="nav-link" href="#synchronization">Synchronization</a>
+          <a class="nav-link" href="#invariants">Format invariants</a>
+        </nav>
+      </aside>
+
+      <main class="content">
+        <section class="doc-section hero-section" id="overview" data-title="Overview">
+          <p class="eyebrow">KRADDLE FORMAT / OVERVIEW</p>
+          <div class="version-badge"><span></span> Alpha specification</div>
+          <h1>Keep software connected to what it means.</h1>
+          <p class="lead">The Kraddle Format is a project-native, database-free structure for recording what software does, what it is for, what it must preserve, and how every part relates.</p>
+
+          <div class="note">
+            <span class="note-icon">i</span>
+            <div><strong>Early specification</strong><p>The semantic model is the focus. Byte-level assignments may change before the first implementation.</p></div>
+          </div>
+
+          <div class="meaning-flow" aria-label="Meaning reconciliation flow">
+            <div><span class="flow-index">01</span><strong>Intent</strong><small>What should exist</small></div>
+            <span class="flow-arrow">→</span>
+            <div><span class="flow-index">02</span><strong>Meaning</strong><small>What must be true</small></div>
+            <span class="flow-arrow">→</span>
+            <div><span class="flow-index">03</span><strong>Software</strong><small>What is built</small></div>
+            <span class="flow-arrow">→</span>
+            <div><span class="flow-index">04</span><strong>Evidence</strong><small>What became true</small></div>
+          </div>
+
+          <h2 id="why">Why it exists</h2>
+          <p>Software meaning is usually fragmented across source code, tests, product documents, design files, commit history, conversations, and human memory. Kraddle gives those pieces a shared structure that travels with the project.</p>
+
+          <div class="card-grid">
+            <article class="feature-card"><span class="card-number">01</span><h3>What does it do?</h3><p>Inputs, outputs, effects, states, and observed behavior.</p></article>
+            <article class="feature-card"><span class="card-number">02</span><h3>What is it for?</h3><p>The purpose, capability, or user outcome a unit serves.</p></article>
+            <article class="feature-card"><span class="card-number">03</span><h3>What must it preserve?</h3><p>Constraints, contracts, invariants, and experience qualities.</p></article>
+            <article class="feature-card"><span class="card-number">04</span><h3>How does it relate?</h3><p>Vertical realization and horizontal collaboration across the system.</p></article>
+          </div>
+
+          <h2 id="principles">Design principles</h2>
+          <ol class="principle-list">
+            <li><strong>Project-native.</strong><span>Meaning lives in <code>.kraddle/</code> and travels with the project.</span></li>
+            <li><strong>Database-free.</strong><span>Canonical state, indexes, history, and synchronization are file-native.</span></li>
+            <li><strong>Local-first.</strong><span>Every operation works without a network connection.</span></li>
+            <li><strong>Evidence-backed.</strong><span>Observed facts, interpretations, and commitments remain distinct.</span></li>
+            <li><strong>Compact but recoverable.</strong><span>Normal storage is binary; readable export is always available.</span></li>
+          </ol>
+        </section>
+
+        <section class="doc-section" id="quickstart" data-title="Quickstart">
+          <p class="eyebrow">START HERE</p>
+          <h1>Quickstart</h1>
+          <p class="lead">Model one behavior, connect it to implementation, and attach evidence.</p>
+          <div class="steps">
+            <article><span>1</span><div><h3>Initialize the workspace</h3><p>Kraddle creates the project-native directory.</p><pre><code>kraddle init</code><button class="copy-button" aria-label="Copy code">Copy</button></pre></div></article>
+            <article><span>2</span><div><h3>Capture a commitment</h3><pre><code>unit u1 behavior "Resume investigation"
+commit c1 u1 is_for "Restore prior research context"
+commit c2 u1 must_preserve "Never mutate research data"</code><button class="copy-button" aria-label="Copy code">Copy</button></pre></div></article>
+            <article><span>3</span><div><h3>Connect implementation</h3><pre><code>unit u2 function "restoreContext"
+relate u1 implemented_by u2 accepted
+observe u2 input "questionId"
+observe u2 output "ResearchContext"</code><button class="copy-button" aria-label="Copy code">Copy</button></pre></div></article>
+          </div>
+        </section>
+
+        <section class="doc-section" id="meaning-model" data-title="Meaning model">
+          <p class="eyebrow">CORE CONCEPTS</p>
+          <h1>Meaning model</h1>
+          <p class="lead">Meaning is composed from units, commitments, relationships, evidence, and scopes.</p>
+          <div class="property-table">
+            <div><code>Meaning unit</code><span>Anything Kraddle can discuss, from a product purpose to a function.</span></div>
+            <div><code>Commitment</code><span>What a unit does, is for, must preserve, or becomes in use.</span></div>
+            <div><code>Relationship</code><span>A typed semantic connection between two units.</span></div>
+            <div><code>Evidence</code><span>A source that supports, challenges, or explains meaning.</span></div>
+            <div><code>Scope</code><span>The product, feature, revision, worktree, or alternative where meaning applies.</span></div>
+          </div>
+          <h2 id="composition">Meaning is compositional</h2>
+          <pre><code>product purpose
+  └── realized_by → capability
+        └── realized_by → behavior
+              ├── implemented_by → UI component
+              └── implemented_by → service
+                    └── decomposed_into → function</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
+        </section>
+
+        <section class="doc-section" id="truth" data-title="Truth and evidence">
+          <p class="eyebrow">CORE CONCEPTS</p>
+          <h1>Truth and evidence</h1>
+          <p class="lead">Kraddle never turns a plausible interpretation into an accepted truth silently.</p>
+          <div class="status-list">
+            <div><span class="status observed">observed</span><p>Directly present in code, runtime behavior, or user input.</p></div>
+            <div><span class="status derived">derived</span><p>Computed from observations using an explicit rule.</p></div>
+            <div><span class="status inferred">inferred</span><p>A plausible interpretation of available evidence.</p></div>
+            <div><span class="status accepted">accepted</span><p>Explicitly approved by an actor or trusted policy.</p></div>
+            <div><span class="status stale">stale</span><p>May no longer describe the referenced revision.</p></div>
+          </div>
+          <div class="warning"><span>!</span><p>Extractors write observations. Agents propose interpretations. Neither may silently create accepted commitments.</p></div>
+        </section>
+
+        <section class="doc-section" id="identity" data-title="Identity and scope">
+          <p class="eyebrow">CORE CONCEPTS</p><h1>Identity and scope</h1>
+          <p class="lead">Meaning survives renamed files, refactored symbols, parallel worktrees, and alternative implementations.</p>
+          <h2 id="anchors">Stable code anchors</h2>
+          <pre><code>repository identity
+language
+symbol kind
+qualified name
+signature fingerprint
+structural fingerprint
+source revision</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
+          <p>After each scan, an anchor remap is marked exact, probable, ambiguous, or broken. Commitments never move across an ambiguous remap without confirmation.</p>
+        </section>
+
+        <section class="doc-section" id="format" data-title="Directory layout">
+          <p class="eyebrow">FORMAT SPECIFICATION</p>
+          <h1>Directory layout</h1>
+          <p class="lead">One canonical `.kraddle/` workspace lives beside the code.</p>
+          <pre><code>.kraddle/
+├── manifest.krd       # identity and format version
+├── schema.krd         # vocabulary and relationship types
+├── heads.krd          # current causal event heads
+├── events/            # immutable event segments
+├── objects/           # content-addressed evidence
+├── indexes/           # rebuildable file-native indexes
+└── local/             # device state; never synchronized</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
+          <div class="note green"><span class="note-icon">✓</span><div><strong>No database layer</strong><p>No SQL engine, embedded database, graph database, or database service is part of local or cloud storage.</p></div></div>
+        </section>
+
+        <section class="doc-section" id="records" data-title="Records">
+          <p class="eyebrow">FORMAT SPECIFICATION</p><h1>Records</h1>
+          <p class="lead">All semantic records share a compact envelope and type-specific payload.</p>
+          <div class="property-table typed">
+            <div><code>record_type</code><span class="type">varint</span><span>Payload type from the schema dictionary.</span></div>
+            <div><code>record_id</code><span class="type">id128</span><span>Stable workspace-unique identity.</span></div>
+            <div><code>scope_id</code><span class="type">id128?</span><span>Scope where the record applies.</span></div>
+            <div><code>origin</code><span class="type">enum</span><span>Human, extractor, agent, policy, or import.</span></div>
+            <div><code>status</code><span class="type">enum</span><span>Observed, inferred, proposed, accepted, and others.</span></div>
+            <div><code>properties</code><span class="type">map</span><span>Type-specific fields encoded by numeric schema IDs.</span></div>
+          </div>
+        </section>
+
+        <section class="doc-section" id="relationships" data-title="Relationships">
+          <p class="eyebrow">FORMAT SPECIFICATION</p><h1>Relationships</h1>
+          <p class="lead">First-class typed connections explain both realization across levels and cooperation among peers.</p>
+          <div class="relationship-columns">
+            <article><span class="relation-label">VERTICAL</span><h3>Across abstraction</h3><code>realized_by</code><code>implemented_by</code><code>decomposed_into</code><code>constrained_by</code><code>verified_by</code></article>
+            <article><span class="relation-label">HORIZONTAL</span><h3>Within a level</h3><code>depends_on</code><code>collaborates_with</code><code>shares_state_with</code><code>precedes</code><code>conflicts_with</code></article>
+          </div>
+        </section>
+
+        <section class="doc-section" id="events" data-title="Events and history">
+          <p class="eyebrow">FORMAT SPECIFICATION</p><h1>Events and history</h1>
+          <p class="lead">Immutable events are the canonical history. Current views are projections of that history.</p>
+          <pre><code>event_id          globally unique 128-bit ID
+workspace_id      owning workspace
+actor_id          human, device, extractor, or agent
+logical_time      causal ordering clock
+causal_parents    zero or more event IDs
+payload           record operations
+schema_version    encoding schema</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
+        </section>
+
+        <section class="doc-section" id="encoding" data-title="Binary encoding">
+          <p class="eyebrow">FORMAT SPECIFICATION</p><h1>Binary encoding</h1>
+          <p class="lead">KRD is a deterministic, framed binary container designed for compactness and forward compatibility.</p>
+          <div class="byte-layout">
+            <div><span>0–3</span><strong>Magic</strong><code>4B 52 44 00</code></div>
+            <div><span>4</span><strong>Major</strong><code>uint8</code></div>
+            <div><span>5</span><strong>Minor</strong><code>uint8</code></div>
+            <div><span>6–7</span><strong>Flags</strong><code>uint16</code></div>
+            <div><span>8–23</span><strong>Workspace ID</strong><code>id128</code></div>
+            <div><span>24–31</span><strong>Header length</strong><code>uint64</code></div>
+          </div>
+          <p>Frames are length-prefixed and checksummed. Readers can skip unknown optional frames without understanding them.</p>
+        </section>
+
+        <section class="doc-section" id="indexes" data-title="Objects and indexes">
+          <p class="eyebrow">FORMAT SPECIFICATION</p><h1>Objects and indexes</h1>
+          <p class="lead">Store large evidence once and query connected meaning through disposable file-native indexes.</p>
+          <div class="property-table">
+            <div><code>units.kri</code><span>Record ID to latest projected record and event.</span></div>
+            <div><code>edges.kri</code><span>Unit ID and relationship type to neighboring IDs.</span></div>
+            <div><code>text.kri</code><span>Search tokens to matching unit and commitment IDs.</span></div>
+            <div><code>anchors.kri</code><span>Artifact anchors to meaning unit IDs.</span></div>
+            <div><code>events.kri</code><span>Event IDs to segment byte offsets.</span></div>
+          </div>
+        </section>
+
+        <section class="doc-section" id="extraction" data-title="Extraction">
+          <p class="eyebrow">OPERATIONS</p><h1>Extraction</h1>
+          <p class="lead">Turn code, documents, tests, and runtime behavior into evidence-backed observations.</p>
+          <div class="pipeline"><span>Discover</span><i>→</i><span>Parse</span><i>→</i><span>Analyze</span><i>→</i><span>Anchor</span><i>→</i><span>Observe</span><i>→</i><span>Confirm</span></div>
+        </section>
+
+        <section class="doc-section" id="synchronization" data-title="Synchronization">
+          <p class="eyebrow">OPERATIONS</p><h1>Synchronization</h1>
+          <p class="lead">Replicate immutable event frames and referenced objects without requiring a central service.</p>
+          <ol class="principle-list compact">
+            <li><strong>Exchange heads.</strong><span>Compare causal event heads and format capabilities.</span></li>
+            <li><strong>Transfer gaps.</strong><span>Send missing frames and referenced content-addressed objects.</span></li>
+            <li><strong>Verify.</strong><span>Check event identities, causal parents, and checksums.</span></li>
+            <li><strong>Project.</strong><span>Update current views and rebuild affected index runs.</span></li>
+          </ol>
+        </section>
+
+        <section class="doc-section" id="invariants" data-title="Format invariants">
+          <p class="eyebrow">REFERENCE</p><h1>Format invariants</h1>
+          <p class="lead">Rules every conforming Kraddle implementation must preserve.</p>
+          <ol class="invariant-list">
+            <li><span>01</span><p><code>.kraddle/</code> is the canonical source of project meaning.</p></li>
+            <li><span>02</span><p>Canonical and derived storage use no database engine or service.</p></li>
+            <li><span>03</span><p>Inferred meaning never becomes accepted without an explicit actor or policy.</p></li>
+            <li><span>04</span><p>Every observation names its source revision and extractor version.</p></li>
+            <li><span>05</span><p>Conflicting accepted meaning is never silently discarded.</p></li>
+            <li><span>06</span><p>Indexes are rebuildable and contain no unique meaning.</p></li>
+          </ol>
+        </section>
+
+        <footer class="doc-footer">
+          <div><span class="brand-mark small"><span></span><span></span><span></span></span><strong>Kraddle Format</strong></div>
+          <p>Project-native software meaning.</p>
+        </footer>
+      </main>
+
+      <aside class="toc" aria-label="On this page">
+        <p>ON THIS PAGE</p>
+        <nav id="tocNav"></nav>
+      </aside>
+    </div>
+
+    <div class="search-modal" id="searchModal" hidden>
+      <button class="search-backdrop" aria-label="Close search"></button>
+      <div class="search-panel" role="dialog" aria-modal="true" aria-label="Search documentation">
+        <div class="search-input-wrap">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" /></svg>
+          <input id="searchInput" type="search" placeholder="Search the Kraddle Format..." autocomplete="off" />
+          <kbd>Esc</kbd>
+        </div>
+        <div class="search-results" id="searchResults"></div>
+      </div>
+    </div>
+    <script src="script.js"></script>
+  </body>
+</html>
