@@ -1,267 +1,303 @@
-# Kraddle — A Medium for Shaping What Software Means
+# Kraddle
 
-> **One sentence (checkpoint 2026-08-10):** Kraddle is a bidirectional medium where people clarify and shape what software means, agents make that meaning executable, and the system continuously relates intended meaning to observed reality across levels of abstraction, alternatives, revisions, and evidence.
+> **Kraddle makes abstraction trustworthy:** it preserves what may safely be forgotten, exposes what remains uncertain, binds consequential meaning to authority and proof, and prevents actors from silently exceeding the context or control available to them.
 
-Kraddle began as a local-first **Agent Development Environment (ADE) HUD** — a grid that orchestrates CLI agents (Claude Code, Copilot CLI, Aider, Codex) via native PTY sessions so you stay on your own keys and subscriptions. That HUD is still the north star for *execution*.
+Kraddle is an early-stage, local-first **semantic control system for software**.
 
-What we've learned since (July–August 2026) moves the center of gravity **one layer up**: before autocomplete, before autopilot, there is a missing middle between a vague intention (*"I want this to exist"*) and a generated product. Kraddle's first standalone product is that middle — the **Meaning Layer** — a local, versioned, evidence-backed model of what software is for, what it does, what it must preserve, and how every part relates.
+It begins where ordinary AI coding tools move too quickly: between “I want this to exist” and generated code. Kraddle helps a builder clarify that intent into structured software meaning, connects the meaning to implementation and evidence, gives agents bounded context and authority, and checks whether resulting reality still agrees.
 
-```
-Vague desire ──► [ missing editable middle ] ──► generated product
-                       ▲ Kraddle lives here
-```
-
-If this layer is right, agents guess far less. If it is wrong or stale, no amount of test coverage fixes it.
-
----
-
-## 💡 Why a Meaning Layer
-
-Existing tools jump `Intent → code/product` with too much hidden interpretation. Corrections then require re-prompting, re-generating, or editing code that is too fine-grained to express the real change:
-
-- *"The button is too low"* → visual correction
-- *"New users don't understand the value"* → behavior/experience correction
-- *"This module owns the wrong responsibility"* → structural correction
-- *"We're solving the wrong problem"* → intent correction
-
-You should be able to correct at the **highest useful level** without translating every intent change into code. Kraddle keeps intended meaning, realized system, alternatives, evidence, and time as **connected, typed, versioned records** — not scattered docs, chats, and tacit knowledge.
-
-Inspired by: the `plan as unit of trust` wedge (Claude), the `decision/engineering commit` durability critique (ChatGPT), Vorflux-style verification, Uncle Bob's *"torture the code with tests"* harness, and Garry Tan's **Personal AGI** thesis — `model (rented) + your context (owned) + harness (markdown skills)` = leverage you keep under your own power.
-
----
-
-## 🔄 The Core Loop
-
-```
-1. Capture  — dump an idea, import docs, or open a repository
-2. Extract  — deterministically observe code/docs/runtime (evidence, not truth)
-3. Clarify  — surface what's missing, contradictory, or only guessed
-4. Compose  — build a connected model: units + commitments + relationships
-5. Inspect  — view purpose / behavior / constraints / structure / evidence
-6. Revise   — produce explicit meaning diffs, not silent overwrites
-7. Reconcile— compare intended meaning vs. extracted reality, choose the level of fix
-8. Sync     — durable locally, optionally replicated to cloud (offline-first)
+```text
+intent
+  → structured meaning
+  → commitments
+  → control and authority
+  → bounded execution
+  → observation and evaluation
+  → intervention and reconciliation
 ```
 
-Loop is bidirectional:
+## Current Status
 
-```
-Intent → meaning → behavior → structure → implementation → running system → evidence
-  ▲                                                                     │
-  └────────────────── infer / observe / reconcile ──────────────────────┘
-```
+Kraddle is in **architecture and adversarial-prototype design**. The repository currently contains:
 
-Downward proposes and generates. Upward observes and infers — with explicit uncertainty (`observed | inferred | proposed | accepted | rejected | contradicted | stale`).
+- The evolving theory and checkpoints in `contexts/`.
+- The canonical terminology and format reference in `docs/`.
+- No implemented CLI, KRD encoder, analyzer, or execution runtime yet.
 
----
+Maturity labels used throughout the project:
 
-## 🧩 What Kraddle Models
+| Label | Meaning |
+| --- | --- |
+| **Conceptual** | A theory or candidate semantic design |
+| **Specified** | A normative contract detailed enough to implement |
+| **Implemented** | Working software exists |
+| **Verified** | Conformance tests establish the implementation's behavior |
 
-### Five kernel records (storage rules stay stable; vocabulary grows)
+## The Problem
 
-| Record | What it is | Examples |
-|---|---|---|
-| **Meaning Unit** | Any identifiable thing worth discussing | `purpose`, `experience`, `capability`, `behavior`, `concept`, `constraint`, `software_element` (file/class/function/component/service/test), `evidence`, `open_question` |
-| **Relationship** | Typed, directed edge between units | vertical: `realized_by`, `implemented_by`, `decomposed_into`, `constrained_by`, `verified_by` · horizontal: `depends_on`, `collaborates_with`, `shares_state_with`, `precedes`, `alternative_to`, `conflicts_with` |
-| **Commitment** | What a unit is accountable to | `does` / `is_for` / `must_preserve` / `becomes_in_use` — each with `statement + origin + status + confidence` |
-| **Evidence** | What supports/challenges a claim | `user_statement`, `document_excerpt`, `code_structure`, `test_result`, `runtime_trace`, `screenshot`, `git_history`, `human_approval`, `agent_interpretation` |
-| **Scope** | Where meaning applies | `product`, `feature`, `journey`, `repository`, `branch`, `worktree`, `revision`, `module`, `alternative` (scopes nest; they don't replace relationships) |
+As software and agent activity grow, neither humans nor models can continuously hold all relevant context. Ordinary abstractions help by hiding detail, but each abstraction makes a wager:
 
-### A unit's inspectable surface
+> Hidden details cannot affect decisions above this boundary while the stated assumptions and invariants hold.
 
-```
-What it is         name · kind · location · abstraction level · scope
-What it does       inputs · outputs · effects · dependencies (observed contract)
-What it is for     commitments served → higher-level behaviors/purposes
-What it must preserve  contracts · constraints · invariants · experience requirements
-What relates to it peers · parent/child meaning · alternatives
-What supports it   source · tests · runtime · human approval
-What is uncertain  observed / inferred / proposed / accepted / stale
-```
+Control decays when that wager becomes false, invisible, stale, or unenforced.
 
-> **Compositional meaning:** A product's meaning is partly realized by coordinated local meanings. A single function can carry an executable contract, a structural responsibility, a product contribution, and a change boundary — all linked upward. But local correctness ≠ global correctness, so Kraddle tracks both local commitments and higher-order interaction constraints.
+Kraddle does not try to make every actor remember everything. It makes the abstraction boundary explicit:
 
----
-
-## 🔍 What Can Be Extracted Without an LLM
-
-Kraddle separates epistemic strength:
-
-| Level | How | Example |
-|---|---|---|
-| **L1 Facts** | Deterministic parsers / compiler APIs / LSP | `restoreContext exists; takes questionId; calls sourceRepository; returns ResearchContext` |
-| **L2 Derived properties** | Rules over facts | `depends_on persistence; reachable from reopen-question workflow; no mutation in tests` |
-| **L3 Interpretations** | LLM/human, flagged as guesses | `appears responsible for reconstructing research context; likely serves "resume investigation"` |
-
-```
-Deterministic extraction → observed structural model → optional interpretation → proposed meaning → human confirmation
+```text
+what is hidden
+what is exported
+what must remain true
+under which assumptions
+how it is evaluated
+who may act or waive
+what happens when it fails
 ```
 
-**Not** `code → "recovered true intent"` (code rarely encodes *why*). Code gives `does`; humans establish `is_for`/`must_preserve`.
+## Product Loop
 
-Tooling: TypeScript Compiler API for semantic facts (definitions, references, callers, types, imports), Tree-sitter for tolerant syntax, Semgrep-style analysis where useful, git/runtime/tests for provenance and observed behavior. Each language emits one normalized `SoftwareElement`/`SoftwareRelation` format with **stable anchors** (`repo + language + kind + qualified_name + signature fingerprint + structural fingerprint + revision`) — not just paths/line numbers.
-
----
-
-## 🖥️ Projections — Same Model, Different Views
-
-The model is not a giant graph you stare at. It's one underlying graph seen through task-specific projections:
-
-- **Inbox** — dump ideas/docs/transcripts/screenshots → Kraddle returns *what I understood / what's important / what's missing / what conflicts / what I'm guessing*
-- **Meaning outline** — `Purpose → Experience → Capabilities → Behaviors → Concepts → Constraints → Open questions`
-- **Element inspector** — `does / is_for / must_preserve / becomes_in_use / relationships / evidence / history` for any selected unit (function → product)
-- **Relationship map** — bounded neighborhood: up one level, down one level, peers, evidence, contradictions, change impact
-- **Meaning diff** — before accepting: `- Articles are primary + Questions are primary` + affected behaviors/components/anchors
-- **Coverage view** — gaps, not vanity scores: `orphan implementation`, `unrealized commitment`, `unverified commitment`, `contradictory implementation`, `overloaded unit`, `fragmented responsibility`, `stale observation`, `ambiguous anchor remap`
-- **Workspace Grid (HUD)** — the original Kraddle surface (multi-agent PTY panes, file tree, diff/monaco, markdown live viewers, planner checklist, command guard) now as *one projection* over the same meaning store
-
-> Garry Tan mapping: **Markdown is code, skill files are employees, the resolver is the org chart.** A skill like *"When a Circle Back recording lands, transcribe → extract commitments/deadlines → link people against the library → flag contradictions"* is a page of English an intern or an agent can run. Kraddle treats skills the same way — `fat skills, thin harness`.
-
----
-
-## 🏗️ Architecture — Local-First, Optionally Synced
-
-### The `.kraddle/` workspace (canonical)
-
-```
-project/
-  .kraddle/
-    manifest.krd       # identity, format version, feature flags
-    schema.krd         # vocabulary + relationship type definitions
-    heads.krd          # current causal event heads
-    events/            # append-only immutable KRD event segments
-    objects/           # large evidence blobs, content-addressed by hash
-    indexes/           # disposable file-native KRI indexes (rebuildable)
-    local/             # device identity and sync cursors; never synced
+```text
+1. Capture an idea, document, repository, or observation.
+2. Clarify consequential ambiguity.
+3. Compose software meaning across abstraction levels.
+4. Accept commitments and preserve decisions and negative knowledge.
+5. Compile consequential meaning into the strongest appropriate guardrails.
+6. Resolve a context envelope and delegated authority for one task.
+7. Execute one bounded episode.
+8. Observe and evaluate the result.
+9. Continue, close, repair, replan, escalate, waive, or abort.
+10. Invalidate stale knowledge and reconcile meaning with reality.
 ```
 
-- Every accepted edit appends an **immutable event** (`event_id, workspace_id, actor_id, device_id, type, payload, timestamp, logical_clock, causal_parents, schema_version`) before updating the derived projection — gives auditability, undo/redo, time travel, and sync.
-- Two serializations: **readable** (diagnostic export and review) and **compact** (KRD frames with typed values, string dictionaries, binary IDs, and optional segment compression).
-- File-native KRI indexes provide ID lookup, adjacency traversal, text search, anchor lookup, and event offsets. They contain no unique meaning and are never synchronized.
-- No SQL engine, embedded database, graph database, or database service is part of local or cloud storage.
-- Secrets never in the model — OS keychain only.
+## Architecture Vocabulary
 
-### Sync (opt-in, never blocks local)
+### Kernel
 
-```
-local edit → append event segment + update heads atomically → exchange causal heads
-→ transfer missing immutable frames and objects → verify checksums → rebuild affected indexes
-```
+The smallest physical semantic algebra:
 
-Automatic merge for additive changes (different units/evidence/relationships); **conflicts become first-class records** (same commitment edited differently, accept vs. reject) for user resolution. `.kraddle` is the source of truth, not a cloud DB. Full export/delete without the cloud.
-
-### Required invariants
-
-1. No inferred statement becomes `accepted` without explicit actor/policy
-2. Every observation names `source_revision + extractor_version`
-3. Every relationship has `type + direction`
-4. Every edit is recoverable from history
-5. Local writes succeed offline
-6. Sync is idempotent
-7. Conflicting accepted meaning is never silently discarded
-8. Deleting a unit preserves its history/evidence
-9. Anchor uncertainty is visible
-10. Blobs are content-addressed and integrity-checked
-11. Secrets never stored in the model
-12. Complete export without the cloud
-
----
-
-## 📁 Repository Layout
-
-```
-kraddle/
-├── README.md
-├── contexts/                         # theory & transcripts (see below)
-│   ├── kraddle_checkpoint_2026-08-10.md          # meaning-to-execution tree, kernel idea
-│   ├── kraddle_compositional_meaning_2026-08-10.md # does/is_for/must_preserve, 3 extraction levels
-│   ├── meaning_layer_architecture_2026-08-28.md  # .kraddle spec, sync, pipeline, phases
-│   ├── convo_with_claude.md / convo_with_chatgpt.md
-│   ├── garry_tan-the_future_of_agi_is_personal.md
-│   ├── general_context.md
-│   └── uncle_bob_on_testing_ai_code.md
-├── .agents/skills/conversational-planning/
-└── src/                              # (legends — implement per phases below)
-    ├── backend/  # ptyManager.ts, server.ts (ws), fileWatcher.ts, extractors/
-    └── frontend/ # WorkspaceGrid, FileTree, Planner, TerminalPane (xterm.js), Inspector, Map, Diff
+```text
+Unit          An identifiable thing Kraddle can discuss.
+Commitment    What should be true, why, or under what constraint.
+Relationship  A typed connection between records.
+Evidence      What supports, challenges, or explains a statement.
+Scope         Where and when meaning applies.
 ```
 
-**Historical HUD bridge** (kept as reference for the execution projection):
+### Profile
 
-```ts
-// src/backend/ptyManager.ts — spawn CLI inside PTY so auth is inherited
-import * as pty from 'node-pty';
-const shell = process.platform === 'win32' ? 'powershell.exe' : 'bash';
-const proc = pty.spawn(shell, [], { name: 'xterm-256color', cols: 100, rows: 30, cwd: process.cwd(), env: process.env });
-proc.onData(data => ws.send(JSON.stringify({ type: 'output', data })));
-ws.on('message', m => { const e = JSON.parse(m); if (e.type==='input') proc.write(e.data); else if (e.type==='resize') proc.resize(e.cols, e.rows); });
+A validated, standardized arrangement of kernel records representing one recurring concept. Profiles add semantics without inflating the kernel.
+
+Examples:
+
+```text
+DecisionProfile
+ProtocolProfile
+EnvelopeProfile
+NegativeKnowledgeProfile
+ControlBinding
+EvaluationProfile
+AuthorityGrant
+ContextEnvelope
+ExecutionEpisode
+ExceptionProfile
 ```
 
-See `contexts/` for the full lineage — start with `kraddle_checkpoint_2026-08-10.md:1`, `kraddle_compositional_meaning_2026-08-10.md:1`, and `meaning_layer_architecture_2026-08-28.md:1`.
+### Envelope
 
----
+A profile whose purpose is to declare a boundary. A context envelope says what an actor knows and does not know. A resource envelope says under which quantitative operating conditions a commitment applies.
 
-## 🗺️ Roadmap — Phase-Gated by Meaning, Not Code Volume
+### Plane
 
-| Phase | Build | Exit: a user can… |
-|---|---|---|
-| **0 — Format lab** | CLI prototype directly on KRD/KRI files; create units/commitments/relationships/scopes/evidence; readable import/export; meaning diff; replay | Represent one real product without losing the theory's distinctions |
-| **1 — TS inspector** | Discover TS repo → files/symbols/imports/calls/types/tests; stable anchors; incremental rescan; show deterministic `does`; let user add `is_for`/`must_preserve` | Trace a function → feature purpose and sideways to its dependencies |
-| **2 — Workspace UI** | Inbox, outline, inspector, map, evidence drawer, diff/history, coverage gaps | Compose/revise a software model without reading encoded records |
-| **3 — Guided composition** | Free-form idea → proposed units/commitments/relationships with source links & uncertainty; ask only gap-closing questions | Turn a vague idea into a model they recognize as concrete and executable |
-| **4 — Local-cloud sync** | Auth/device identity, append/pull, object store, offline recovery, conflict UI, export/delete | Edit offline on two devices and reconcile without silent loss |
-| **5 — Reconciliation API** | Compare accepted commitments vs. observations; stale/missing links; `get_change_impact`; compact agent tools (`get_unit`, `get_neighbors/ancestors/descendants`, `get_commitments/evidence/open_questions/contradictions`) | Give agents a scoped, evidence-backed slice instead of a project dump |
+A conceptual subsystem grouped by responsibility. A plane is not stored as a record.
 
-> **Discipline:** Prove each phase with one real repo modeled end-to-end. Keep the kernel (`identity, version, scope, source, status, evidence, connection`) small; grow vocabulary via `kind` values only when a real project demands it.
-
----
-
-## 🔐 Positioning & Principles
-
-- **Local trust:** Source, credentials, and meaning stay on your machine. Cloud is an optional replica/relay, not the place where the model lives.
-- **BYOK / own your skills:** No proxy, no bundled tokens, no credential pivoting. Skill files are *your* cognition externalized — keep them in a repo you control (`Own your skills, or your job becomes a skill file` — Tan).
-- **Extract facts deterministically. Infer explicitly. Let humans establish commitments. Connect all three without confusing them.**
-- **Verification before generation:** PTY HUD + Uncle Bob gauntlet (unit/property/mutation/jitter/perf) + architecture conformance (does the dependency graph match approved decisions?) — but verification answers *"did we build it right?"*; the meaning layer answers *"did we decide the right thing?"*
-- **Latency vs. determinism:** Steer taste/judgment in latent space (markdown skills); run arithmetic and dependency checks in deterministic code — never ask a model to seat 6,000 people without an executable system.
-- **Provenance + hygiene:** Every fact has a source; contradictions are flagged not overridden; the librarian prunes — a brain without hygiene is a confident liar.
-
----
-
-## ⚙️ Handling Billing & Automation (Historical Note)
-
-Early Kraddle distinguished **PTY Mode** (native PTY → interactive TTY → standard flat-rate subscriptions preserved) vs. **SDK Mode** (`@anthropic-ai/claude-agent-sdk` `query()` generators → usage-based API credits). That distinction still governs the HUD execution projection; the meaning layer itself incurs no model calls unless you opt into L3 interpretation.
-
----
-
-## 🚀 Getting Started (Current)
-
-This repo is currently a **knowledge base + spec**. The executable prototype follows Phase 0.
-
-```bash
-# explore the theory in order
-cat contexts/kraddle_checkpoint_2026-08-10.md
-cat contexts/kraddle_compositional_meaning_2026-08-10.md
-cat contexts/meaning_layer_architecture_2026-08-28.md
-
-# when src/ lands (Tauri + React + TypeScript + KRD/KRI + TS Compiler API + Tree-sitter)
-# npm install && npm run dev   # local workspace at ./.kraddle
+```text
+Semantic plane                Preserves meaning and evidence.
+Control plane                 Resolves applicability, context, authority, and responses.
+Execution/observation plane   Performs bounded work and emits evidence.
+Evaluation plane              Compares resulting reality against commitments.
 ```
 
-Suggested tech (provisional, validate in Phase 0): `Tauri | React+TS | KRD canonical segments | KRI file-native indexes | content-addressed objects | TypeScript Compiler API | Tree-sitter (incremental) | immutable object storage + event manifests` on the cloud side.
+### Projection
 
----
+A task-specific human or agent view derived from the same canonical records: meaning outline, element inspector, relationship map, context packet, evaluation report, or execution HUD.
 
-## 📄 License
+## Meaning Model
 
-MIT — built locally to give engineers full control over workflows and meaning.
+Every software element may express four commitment families:
 
----
+```text
+does             Observable computation or behavior.
+is_for           Purpose or higher-level capability served.
+must_preserve    Contracts, invariants, boundaries, and prohibitions.
+becomes_in_use   Runtime emergence and human experience.
+```
 
-### Further Reading
+Meaning connects vertically and horizontally:
 
-- `contexts/general_context.md:1` — Daniel Steigerwald's *code observatory*, idea tags by agent, recent orchestrator/model notes
-- `contexts/garry_tan-the_future_of_agi_is_personal.md:1` — `GBrain` (220k markdown pages), `GStack` (123k★), five-step compounding loop, `skillify`
-- `contexts/uncle_bob_on_testing_ai_code.md:1` — 20× code → torture it with tests
-- `contexts/convo_with_claude.md:1` / `contexts/convo_with_chatgpt.md:1` — from `plan` → `decision` → `engineering commit` → `capability/intent graph`
+```text
+Vertical:   purpose → capability → behavior → component → function
+Horizontal: dependencies, collaboration, state sharing, ordering, alternatives
+```
 
-Contributions that keep the kernel small and prove vocabulary against real repos are most welcome.
+Kraddle separates:
+
+```text
+Commitment      What should be true and why.
+Computation     What implementation does.
+Observation     What happened when it ran.
+Interpretation  What the result means to a person or agent.
+```
+
+## Orthogonal State
+
+A single status cannot faithfully represent semantic truth.
+
+```text
+epistemic_basis   observed | derived | interpreted | asserted
+approval_state    proposed | accepted | rejected | superseded
+evaluation_state  satisfied | violated | unknown | not_applicable |
+                  indeterminate | evaluation_failed
+freshness_state   current | stale | expired
+confidence        explicit estimate
+```
+
+An accepted commitment may still be violated, unknown, or supported only by stale evidence.
+
+## Precision Gradient
+
+Meaning becomes as formal as risk requires:
+
+```text
+R0 Exploratory   Feeling, aspiration, unresolved thought.
+R1 Descriptive   Scoped human-readable statement.
+R2 Structured    Typed conditions, effects, thresholds, and exceptions.
+R3 Evaluatable   A defined protocol can return a qualified result.
+R4 Executable    A test, analyzer, monitor, type rule, or review procedure exists.
+R5 Enforced      Failure gates, restricts, blocks, or escalates action.
+```
+
+Not all meaning should reach R5. “The interface should feel calm” may use a structured human review. “Domain must not import UI” can compile to a deterministic architecture rule.
+
+## Meaning Compiler
+
+The meaning compiler maps accepted commitments to the strongest appropriate operational artifacts while preserving the original meaning:
+
+```text
+original meaning
+  → operationalization
+  → evaluator or guardrail
+  → invalidation dependencies
+  → response policy
+  → resulting evidence
+```
+
+Compiled outputs may include types, schemas, dependency rules, property tests, protocol checks, performance tests, runtime assertions, monitors, resource limits, sandbox permissions, human review rubrics, or escalation rules.
+
+Determinism does not imply completeness. Every evaluator records coverage, blind spots, assumptions, version, and freshness.
+
+## Control Objects
+
+### Context Envelope
+
+Declares task, scope, revision, included meaning, applicable commitments, allowed and forbidden effects, source inventory, traversal policy, omissions, stale inputs, unavailable sources, and a **relative completeness claim**.
+
+### Execution Episode
+
+One bounded attempt to change reality: purpose, intended delta, base revision, context envelope, authority, effects, proof obligations, escalation conditions, resulting revision, and outcome.
+
+### Authority Grant
+
+Distinguishes authorship, responsibility, approval authority, execution authority, waiver authority, and risk-acceptance authority.
+
+### Evaluation
+
+Records target, scope, revision, evaluator and version, inputs, coverage, result, evidence, uncertainty, blind spots, freshness, and invalidation triggers.
+
+### Exception
+
+A scoped, authorized, justified, expiring relaxation. It never deletes the original commitment.
+
+## Project-Native Format
+
+Kraddle's canonical state lives beside the project and uses no database engine or service:
+
+```text
+.kraddle/
+├── manifest.krd       # workspace identity and format capabilities
+├── schema.krd         # vocabulary and profile definitions
+├── heads.krd          # current causal event heads
+├── events/            # immutable KRD event segments
+├── objects/           # content-addressed evidence and snapshots
+├── indexes/           # rebuildable file-native KRI indexes
+└── local/             # device-local state; never synchronized
+```
+
+The KRD/KRI byte layout remains **conceptual**, not implemented. The semantic and profile metamodel must be proven before storage optimization becomes a priority.
+
+## Immediate Design Work
+
+Seven connected specification problems remain:
+
+```text
+1. Profile realization metamodel
+2. Profile identity and atomicity
+3. Typed dependency and invalidation semantics
+4. Complete evaluation lifecycle
+5. Response-policy resolution
+6. Meaning-compilation lifecycle
+7. Closed-loop conformance and adversarial test suite
+```
+
+The normative completion plan is in `contexts/architecture_completion_plan_2026-09-01.md`. The first profile specification is in `contexts/profile_definition_metamodel_2026-09-01.md`.
+
+## First Adversarial Proof
+
+One test system should contain:
+
+```text
+Behavioral requirement
+Architectural prohibition
+Temporal protocol invariant
+Quantitative resource envelope
+Rejected alternative
+Human-evaluated experience commitment
+```
+
+One agent change should deliberately trigger:
+
+```text
+local behavior succeeds but architecture fails
+static structure succeeds but temporal behavior fails
+functional behavior succeeds but the resource budget fails
+the agent reintroduces a rejected approach
+the agent attempts to weaken its governing commitment
+a required evaluator cannot establish sufficient coverage
+```
+
+Kraddle succeeds when it resolves applicable meaning, declares context boundaries, bounds authority, distinguishes violations from evaluation failure, applies the correct response, preserves rationale and evidence, and closes only after obligations are satisfied or residual risk is explicitly accepted.
+
+## Repository Guide
+
+```text
+docs/                                   Canonical visual reference
+contexts/semantic_control_plane_*.md    Current architectural synthesis
+contexts/architecture_completion_*.md  Remaining design work and review fixture
+contexts/meaning_layer_architecture_*.md Storage and extraction lineage
+contexts/kraddle_compositional_*.md     Meaning and deterministic extraction lineage
+contexts/kraddle_checkpoint_*.md        Original missing-middle synthesis
+```
+
+Start with `docs/index.html`, then read `contexts/profile_definition_metamodel_2026-09-01.md` and the two newest architectural checkpoints.
+
+## Current Claim
+
+Kraddle does not promise that control never decays in an open, changing system. It aims to **bound control decay, make remaining uncertainty visible, and prevent silent movement beyond known context, evidence, or authority**.
+
+Achievable guarantees include:
+
+- No silent promotion of inference to accepted meaning.
+- No silent omission of known applicable commitments.
+- No silent execution outside delegated authority.
+- No silent success when required evaluation failed or did not run.
+- No silent reliance on stale evidence.
+- No silent waiver of violations.
+- No silent completeness claim beyond a declared boundary.
