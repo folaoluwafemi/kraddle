@@ -32,6 +32,23 @@ A2  src/kernel.js:345-347 evidence pin is vacuous:
 A3  src/kernel.js:604 revision binding only runs when resultingStateRef
     exists. A no-op-claiming episode with effects absent and no resulting
     state skips binding entirely.
+
+From the second external review (verified against code):
+
+A4  src/kernel.js:431-449 classifyEffect matches ONLY admissionId.
+    An observed effect carrying a real admissionId but a different
+    operation/target (admitted "write src/domain/a.ts", recorded as
+    "delete src/other/secrets.txt") classifies as controlled.
+    The most important remaining gap in the effect boundary.
+
+A5  src/kernel.js:658-666 init() unconditionally overwrites manifest.krd
+    with a new workspace UUID and resets heads. Running init() twice
+    silently changes workspace identity.
+
+A6  src/kernel.js:714-749 transact() has no serialization. Two concurrent
+    calls clone the same state; the later in-memory assignment and
+    heads.krd write can discard the earlier transaction. This is
+    in-process concurrency, not the deferred AD-08 branch problem.
 ```
 
 ---
@@ -70,7 +87,95 @@ OUT: everything in Phase 0 Section 9, still deferred. AD-06 through
 
 ## 3. Steps
 
-### Step 1 — Cover the blocking-modality rule  (repair A1)
+### Step 1 — Match observed effects to their admissions  (repair A4)
+
+```text
+GOAL       An admission ID authorizes exactly the effect it admitted,
+           not any effect that quotes it.
+
+FILES      src/kernel.js, test/adversarial.test.js
+
+IMPLEMENT  In classifyEffect, after finding the ledger entry, compare:
+             observedEffect.operation === admission.operation
+             observedEffect.target     === admission.target
+           Any mismatch:
+             { controlled: false, code: DENIAL.UNCONTROLLED_EFFECT,
+               reason: "effect_mismatch" }
+           The existing observedAt ordering check stays.
+
+TEST       New test "an observed effect must match its admission":
+             1. closureState; admitEffect write src/domain/a.ts;
+                recordObservedEffect with that admissionId but
+                operation "delete", target "src/other/secrets.txt"
+                -> classifyEffect controlled === false,
+                   reason "effect_mismatch"
+                -> validateEpisodeClosure throws UNCONTROLLED_EFFECT
+             2. positive: same admissionId with the matching
+                operation and target -> controlled === true,
+                closure passes.
+           Existing AD-10 tests record matching effects and must
+           pass unmodified.
+
+VERIFY     npm test -> 25 pass / 6 todo / 0 fail.
+```
+
+### Step 2 — Make init() non-destructive  (repair A5)
+
+```text
+GOAL       Initialization can no longer silently replace an existing
+           workspace identity.
+
+FILES      src/kernel.js, test/kernel.test.js
+
+API        Add DENIAL.WORKSPACE_EXISTS: "WORKSPACE_EXISTS".
+           init() throws ControlDenial(WORKSPACE_EXISTS, { root })
+           when .kraddle/manifest.krd already exists.
+           Opening an existing workspace is done with new Workspace(root)
+           followed by load(). No idempotent-init path in this phase.
+
+TEST       Two tests in kernel.test.js:
+             1. init() twice on the same root
+                -> second call throws e.code === WORKSPACE_EXISTS,
+                   manifest on disk unchanged (read it back, same
+                   workspaceId as the first init returned).
+             2. init(), transact one unit, new Workspace(root).load()
+                -> state present, trusted true, no init() call needed.
+
+VERIFY     npm test -> 27 pass / 6 todo / 0 fail.
+```
+
+### Step 3 — Serialize transact() and load()  (repair A6)
+
+```text
+GOAL       Concurrent calls within one process cannot lose a committed
+           transaction or corrupt heads.
+
+FILES      src/kernel.js, test/kernel.test.js
+
+IMPLEMENT  Add a private promise chain: this._lock = Promise.resolve().
+           transact() and load() each wrap their entire body in:
+             const release = this._chain();
+             try { ...body... } finally { release(); }
+           where _chain() appends to the lock and returns a resolver.
+           Sequential semantics; no parallelism within a Workspace.
+           Add one code comment on transact(): rename is atomic but
+           not fsync-durable; a crash after rename may lose the tail
+           of the event history. This is a stated durability
+           limitation of Phase 0, not a guarantee.
+
+TEST       One test "concurrent transactions are serialized":
+             init(); fire TWO transacts without awaiting the first
+             (Promise.all). Then:
+             - both event files exist (count === 2)
+             - heads.krd contains both transaction ids, length 2
+             - in-memory state contains both records
+             - a fresh Workspace(root).load() projects both,
+               trusted true, projectedThrough 2.
+
+VERIFY     npm test -> 28 pass / 6 todo / 0 fail.
+```
+
+### Step 4 — Cover the blocking-modality rule  (repair A1)
 
 ```text
 GOAL       The rule at src/kernel.js:190-192 gets a real test.
@@ -92,10 +197,10 @@ TEST       New test: "rejects a blocking control without an evaluator".
            version asserted the wrong failure and must not survive
            unchanged alongside a correct one.
 
-VERIFY     npm test -> 24 pass / 6 todo / 0 fail.
+VERIFY     npm test -> 29 pass / 6 todo / 0 fail.
 ```
 
-### Step 2 — Fail closed on vacuous evidence pins  (repair A2)
+### Step 5 — Fail closed on vacuous evidence pins  (repair A2)
 
 ```text
 GOAL       An unpinned or partially-pinned evidence record can never
@@ -128,10 +233,10 @@ TEST       Two new tests in adversarial.test.js:
                 revision -> EVIDENCE_PIN_MISMATCH.
            All existing AD-01 assertions must still pass unmodified.
 
-VERIFY     npm test -> 26 pass / 6 todo / 0 fail.
+VERIFY     npm test -> 31 pass / 6 todo / 0 fail.
 ```
 
-### Step 3 — Require explicit no-op declaration  (repair A3)
+### Step 6 — Require explicit no-op declaration  (repair A3)
 
 ```text
 GOAL       An episode with no recorded effects must explicitly declare
@@ -160,10 +265,10 @@ TEST       Two new tests:
              2. same fixture with episode.noOp = true, plus a satisfied
                 obligation -> closes.
 
-VERIFY     npm test -> 28 pass / 6 todo / 0 fail.
+VERIFY     npm test -> 33 pass / 6 todo / 0 fail.
 ```
 
-### Step 4 — Regex dependency extractor
+### Step 7 — Regex dependency extractor
 
 ```text
 GOAL       Classify import edges from an in-memory file map, honestly.
@@ -221,10 +326,10 @@ TEST       test/extract.test.js, six tests:
              6. computeFileMapDigest: same map in different key order
                 -> same digest; different content -> different digest
 
-VERIFY     npm test -> 34 pass / 6 todo / 0 fail.
+VERIFY     npm test -> 39 pass / 6 todo / 0 fail.
 ```
 
-### Step 5 — Architecture-rule evaluator
+### Step 8 — Architecture-rule evaluator
 
 ```text
 GOAL       Evaluate "X must not import Y" over extracted edges, with
@@ -268,10 +373,10 @@ TEST       test/evaluators.test.js, three tests (build file maps inline):
              3. clean map: domain imports only domain helper -> "satisfied",
                 coverage sufficient via kernel.validateCoverage
 
-VERIFY     npm test -> 37 pass / 6 todo / 0 fail.
+VERIFY     npm test -> 42 pass / 6 todo / 0 fail.
 ```
 
-### Step 6 — The two-block demo, end to end
+### Step 9 — The two-block demo, end to end
 
 ```text
 GOAL       The demo from Phase 0 §8, as one honest test. Advisory
@@ -353,7 +458,7 @@ TEST       Two tests: "the two-block demo" (steps 1-10) and
            messages. No test-local helpers shared with other files;
            duplicate the small env/rel helpers locally.
 
-VERIFY     npm test -> 39 pass / 6 todo / 0 fail.
+VERIFY     npm test -> 44 pass / 6 todo / 0 fail.
 ```
 
 ---
@@ -361,7 +466,10 @@ VERIFY     npm test -> 39 pass / 6 todo / 0 fail.
 ## 4. Definition Of Done
 
 ```text
-npm test: 39 pass / 6 todo / 0 fail. Exact tally reported.
+npm test: 44 pass / 6 todo / 0 fail. Exact tally reported.
+An observed effect must match the operation and target of its admission.
+init() cannot overwrite an existing workspace.
+transact() and load() are serialized within a Workspace.
 The blocking-modality rule has direct coverage.
 A vacuous evidence pin cannot pass.
 A no-op episode requires an explicit noOp declaration.
@@ -369,8 +477,8 @@ The extractor classifies all four edge resolutions and documents
   its own under-extraction limitation in the module docstring.
 The demo test proves both blocks and the clean positive control.
 No assertion was weakened. Permitted fixture changes occurred only
-  in Step 3, in the strengthening direction.
-Seven commits, one per step, each green when made.
+  in Step 6, in the strengthening direction.
+Nine commits, one per step, each green when made.
 ```
 
 ---
@@ -379,7 +487,7 @@ Seven commits, one per step, each green when made.
 
 ```text
 Final tally:          __ pass / __ todo / __ fail
-Steps completed:      __ of 6 (plus final verification)
+Steps completed:      __ of 9 (plus final verification)
 Guardrails violated:  none | list
 Deviations from plan: none | list with reason
 Blocked on:           nothing | describe
