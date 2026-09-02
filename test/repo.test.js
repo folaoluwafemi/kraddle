@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import { test } from "node:test";
-import { IGNORED_DIRS, readRepoFiles } from "../src/repo.js";
+import { computeFileMapDigest } from "../src/extract.js";
+import { DENIAL } from "../src/kernel.js";
+import { gitStateRef, IGNORED_DIRS, readRepoFiles } from "../src/repo.js";
+
+const exec = promisify(execFile);
 
 async function tempRoot() {
   return mkdtemp(join(tmpdir(), "kraddle-repo-"));
@@ -74,4 +80,66 @@ test("an empty directory yields an empty map without throwing", async () => {
 
 test("IGNORED_DIRS contains the Phase 1 ignore set", () => {
   assert.deepEqual(IGNORED_DIRS, ["node_modules", ".git", ".kraddle", "dist", "build", "coverage"]);
+});
+
+async function makeTempGitRepo() {
+  const root = await tempRoot();
+  await exec("git", ["init"], { cwd: root });
+  await exec("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  await exec("git", ["config", "user.name", "Test"], { cwd: root });
+  return root;
+}
+
+test("gitStateRef pins the committed HEAD sha and repo basename", async () => {
+  const root = await makeTempGitRepo();
+  try {
+    await writeFile(join(root, "a.ts"), "export const a = 1;\n");
+    await exec("git", ["add", "a.ts"], { cwd: root });
+    await exec("git", ["commit", "-m", "init"], { cwd: root });
+    const { stdout } = await exec("git", ["rev-parse", "HEAD"], { cwd: root });
+    const expectedSha = stdout.trim();
+    const { repository, revision } = await gitStateRef(root);
+    const { stdout: top } = await exec("git", ["rev-parse", "--show-toplevel"], { cwd: root });
+    assert.equal(revision, expectedSha);
+    const toplevelBasename = top.trim().split(/[\\/]/).at(-1);
+    assert.equal(repository, toplevelBasename);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("gitStateRef throws git_unavailable outside a repository", async () => {
+  const root = await tempRoot();
+  try {
+    await assert.rejects(
+      () => gitStateRef(root),
+      (e) => e.code === DENIAL.ENVELOPE_INVALID && e.detail.reason === "git_unavailable",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a dirty working tree still pins the committed sha", async () => {
+  const root = await makeTempGitRepo();
+  try {
+    await writeFile(join(root, "a.ts"), "export const a = 1;\n");
+    await exec("git", ["add", "a.ts"], { cwd: root });
+    await exec("git", ["commit", "-m", "init"], { cwd: root });
+    const { stdout } = await exec("git", ["rev-parse", "HEAD"], { cwd: root });
+    const committedSha = stdout.trim();
+
+    await writeFile(join(root, "a.ts"), "export const a = 2;\n");
+    await writeFile(join(root, "b.ts"), "export const b = 1;\n");
+
+    const { revision } = await gitStateRef(root);
+    assert.equal(revision, committedSha);
+    const { files } = await readRepoFiles(root);
+    assert.equal(files["b.ts"], "export const b = 1;\n");
+    const contentDigest = computeFileMapDigest(files);
+    assert.equal(typeof contentDigest, "string");
+    assert.equal(contentDigest.length, 64);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

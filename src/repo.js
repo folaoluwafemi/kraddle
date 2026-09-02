@@ -1,6 +1,11 @@
+import { execFile } from "node:child_process";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import { SOURCE_EXTENSIONS } from "./extract.js";
+import { ControlDenial, DENIAL } from "./kernel.js";
+
+const exec = promisify(execFile);
 
 export const IGNORED_DIRS = ["node_modules", ".git", ".kraddle", "dist", "build", "coverage"];
 
@@ -54,4 +59,20 @@ export async function readRepoFiles(rootDir, {
 
   await walk(rootDir, "");
   return { files, skipped };
+}
+
+export async function gitStateRef(repoDir) {
+  try {
+    const head = await exec("git", ["-C", repoDir, "rev-parse", "HEAD"]);
+    const toplevel = await exec("git", ["-C", repoDir, "rev-parse", "--show-toplevel"]);
+    const revision = head.stdout.trim();
+    const toplevelPath = toplevel.stdout.trim();
+    if (!revision || !toplevelPath) {
+      throw new Error("empty git output");
+    }
+    const repository = toplevelPath.split(/[\\/]/).at(-1);
+    return { repository, revision };
+  } catch {
+    throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { reason: "git_unavailable" });
+  }
 }
