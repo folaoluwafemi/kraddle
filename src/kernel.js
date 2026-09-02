@@ -15,10 +15,62 @@ const EVALUATION_RESULTS = new Set([
 
 const digest = (value) => createHash("sha256").update(value).digest("hex");
 
+export class ControlDenial extends Error {
+  constructor(code, detail = {}) {
+    super(`${code}: ${JSON.stringify(detail)}`);
+    this.name = "ControlDenial";
+    this.code = code;
+    this.detail = detail;
+  }
+}
+
+export const DENIAL = Object.freeze({
+  ENVELOPE_INVALID:                 "ENVELOPE_INVALID",
+  ENVELOPE_ENUM_INVALID:            "ENVELOPE_ENUM_INVALID",
+  ACCEPTANCE_NOT_AUTHORIZED:        "ACCEPTANCE_NOT_AUTHORIZED",
+
+  SELF_AMENDMENT_DENIED:            "SELF_AMENDMENT_DENIED",
+  AUTHORITY_SELF_AMENDMENT_DENIED:  "AUTHORITY_SELF_AMENDMENT_DENIED",
+  AUTHORITY_MISSING_OPERATIONS:     "AUTHORITY_MISSING_OPERATIONS",
+  AUTHORITY_EXPIRED:                "AUTHORITY_EXPIRED",
+  AUTHORITY_REVOKED:                "AUTHORITY_REVOKED",
+
+  OPERATION_NOT_AUTHORIZED:         "OPERATION_NOT_AUTHORIZED",
+  OPERATION_FORBIDDEN:              "OPERATION_FORBIDDEN",
+  TARGET_OUTSIDE_AUTHORITY:         "TARGET_OUTSIDE_AUTHORITY",
+  MUTATION_NOT_AUTHORIZED:          "MUTATION_NOT_AUTHORIZED",
+  PROFILE_GRAFT_DENIED:             "PROFILE_GRAFT_DENIED",
+
+  CONTEXT_INCOMPLETE:               "CONTEXT_INCOMPLETE",
+  OMITTED_APPLICABLE_COMMITMENT:    "OMITTED_APPLICABLE_COMMITMENT",
+  UNRESOLVED_SELECTOR:              "UNRESOLVED_SELECTOR",
+  UNRESOLVED_DEPENDENCY_EDGE:       "UNRESOLVED_DEPENDENCY_EDGE",
+
+  EPISODE_NOT_ACTIVE:               "EPISODE_NOT_ACTIVE",
+  EPISODE_OUTCOME_MISSING:          "EPISODE_OUTCOME_MISSING",
+  UNCONTROLLED_EFFECT:              "UNCONTROLLED_EFFECT",
+
+  EVALUATION_RESULT_INVALID:        "EVALUATION_RESULT_INVALID",
+  EVALUATION_NOT_SATISFIED:         "EVALUATION_NOT_SATISFIED",
+  EVALUATION_FAILED_NOT_A_PASS:     "EVALUATION_FAILED_NOT_A_PASS",
+  EVALUATION_REVISION_MISMATCH:     "EVALUATION_REVISION_MISMATCH",
+  EVALUATION_STALE:                 "EVALUATION_STALE",
+
+  COVERAGE_INCOMPLETE:              "COVERAGE_INCOMPLETE",
+  COVERAGE_UNKNOWN_NONEMPTY:        "COVERAGE_UNKNOWN_NONEMPTY",
+  COVERAGE_EXCLUSION_NOT_PERMITTED: "COVERAGE_EXCLUSION_NOT_PERMITTED",
+  COVERAGE_DIGEST_MISMATCH:         "COVERAGE_DIGEST_MISMATCH",
+
+  SEGMENT_DIGEST_MISMATCH:          "SEGMENT_DIGEST_MISMATCH",
+  SEGMENT_COMMIT_MARKER_MISSING:    "SEGMENT_COMMIT_MARKER_MISSING",
+  PROJECTION_UNTRUSTED:             "PROJECTION_UNTRUSTED",
+  EVIDENCE_PIN_MISMATCH:            "EVIDENCE_PIN_MISMATCH",
+});
+
 function profileRoot(state, profileId) {
   const root = state.units.get(profileId);
   if (!root || !PROFILE_KINDS.has(root.kind)) {
-    throw new Error(`Unknown profile root: ${profileId}`);
+    throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { profileId, reason: "unknown_profile_root" });
   }
   return root;
 }
@@ -42,19 +94,19 @@ function roleTarget(state, edge) {
 function requireRole(state, profileId, role, targetType, count = 1) {
   const edges = relationshipsForRole(state, profileId, role);
   if (edges.length !== count) {
-    throw new Error(`${profileId}: role ${role} requires exactly ${count} ${targetType} record(s)`);
+    throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { profileId, role, expected: count, targetType });
   }
   if (edges.some((edge) => edge.targetType !== targetType || !roleTarget(state, edge))) {
-    throw new Error(`${profileId}: role ${role} has an invalid target`);
+    throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { profileId, role, reason: "invalid_target" });
   }
   return edges;
 }
 
 function optionalRole(state, profileId, role, targetType) {
   const edges = relationshipsForRole(state, profileId, role);
-  if (edges.length > 1) throw new Error(`${profileId}: role ${role} allows at most one record`);
+  if (edges.length > 1) throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { profileId, role, expected: 1 });
   if (edges.length && (edges[0].targetType !== targetType || !roleTarget(state, edges[0]))) {
-    throw new Error(`${profileId}: role ${role} has an invalid target`);
+    throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { profileId, role, reason: "invalid_target" });
   }
   return edges;
 }
@@ -71,7 +123,7 @@ export function emptyState() {
 
 export function applyOperation(state, operation) {
   const { type, value } = operation;
-  if (!value?.id) throw new Error(`${type}: record id is required`);
+  if (!value?.id) throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { type, missing: ["id"] });
 
   if (type === "unit.create" || type === "unit.update") state.units.set(value.id, value);
   else if (type === "commitment.create" || type === "commitment.update") state.commitments.set(value.id, value);
@@ -80,10 +132,10 @@ export function applyOperation(state, operation) {
   else if (type === "scope.create" || type === "scope.update") state.scopes.set(value.id, value);
   else if (type === "unit.tombstone") {
     const unit = state.units.get(value.id);
-    if (!unit) throw new Error(`Cannot tombstone unknown unit: ${value.id}`);
+    if (!unit) throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { type, id: value.id, reason: "unknown_record" });
     state.units.set(value.id, { ...unit, tombstoned: true });
   } else {
-    throw new Error(`Unknown operation: ${type}`);
+    throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { type, reason: "unknown_operation" });
   }
 }
 
@@ -92,9 +144,9 @@ export function validateProfile(state, profileId) {
   const members = profileMembers(state, profileId);
   const roles = new Set(members.map((edge) => edge.role));
   for (const edge of members) {
-    if (edge.profileId !== profileId) throw new Error(`${profileId}: foreign profile member`);
+    if (edge.profileId !== profileId) throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { profileId, relationshipId: edge.id, reason: "foreign_profile_member" });
     if (!edge.role || !edge.targetType || !roleTarget(state, edge)) {
-      throw new Error(`${profileId}: malformed profile member`);
+      throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { profileId, relationshipId: edge.id, reason: "malformed_profile_member" });
     }
   }
 
@@ -107,7 +159,7 @@ export function validateProfile(state, profileId) {
     optionalRole(state, profileId, "evaluator", "unit");
     const modality = roleTarget(state, relationshipsForRole(state, profileId, "modality")[0]);
     if (["invariant", "prohibition", "requirement"].includes(modality.value) && !roles.has("evaluator")) {
-      throw new Error(`${profileId}: blocking modality requires an evaluator`);
+      throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { profileId, modality: modality.value, reason: "blocking_modality_requires_evaluator" });
     }
   }
 
@@ -118,7 +170,7 @@ export function validateProfile(state, profileId) {
     requireRole(state, profileId, "evaluator", "unit");
     const result = requireRole(state, profileId, "result", "commitment")[0];
     const resultValue = roleTarget(state, result)?.value;
-    if (!EVALUATION_RESULTS.has(resultValue)) throw new Error(`${profileId}: invalid evaluation result`);
+    if (!EVALUATION_RESULTS.has(resultValue)) throw new ControlDenial(DENIAL.EVALUATION_RESULT_INVALID, { profileId, result: resultValue });
     requireRole(state, profileId, "coverage", "commitment");
   }
 
@@ -147,58 +199,58 @@ function profileState(root) {
 
 export function admitEffect(state, episodeId, effect) {
   const episode = profileRoot(state, episodeId);
-  if (episode.kind !== "execution_episode") throw new Error("Effect admission requires an execution episode");
+  if (episode.kind !== "execution_episode") throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { episodeId, kind: episode.kind, reason: "not_execution_episode" });
   validateProfile(state, episodeId);
   if (!["authorized", "running"].includes(profileState(episode))) {
-    throw new Error(`Episode ${episodeId} is not active`);
+    throw new ControlDenial(DENIAL.EPISODE_NOT_ACTIVE, { episodeId, lifecycle: profileState(episode) });
   }
 
   const authority = profileRole(state, episodeId, "authority_grant", "unit");
   const context = profileRole(state, episodeId, "context_envelope", "unit");
   if (context?.valid === false || context?.completeness === "incomplete") {
-    throw new Error(`Episode ${episodeId} has an incomplete context envelope`);
+    throw new ControlDenial(DENIAL.CONTEXT_INCOMPLETE, { episodeId });
   }
   if (authority?.revoked || (authority?.expiresAt && authority.expiresAt <= Date.now())) {
-    throw new Error(`Episode ${episodeId} has expired or revoked authority`);
+    throw new ControlDenial(DENIAL.AUTHORITY_EXPIRED, { episodeId });
   }
 
   const allowed = authority?.operations;
   if (!Array.isArray(allowed)) {
-    throw new Error(`Episode ${episodeId} has incomplete authority operations`);
+    throw new ControlDenial(DENIAL.AUTHORITY_MISSING_OPERATIONS, { episodeId });
   }
   if (!allowed.includes(effect.operation)) {
-    throw new Error(`Effect operation is not authorized: ${effect.operation}`);
+    throw new ControlDenial(DENIAL.OPERATION_NOT_AUTHORIZED, { episodeId, operation: effect.operation });
   }
   const forbidden = episode.forbiddenOperations ?? [];
   if (forbidden.includes(effect.operation)) {
-    throw new Error(`Effect operation is forbidden: ${effect.operation}`);
+    throw new ControlDenial(DENIAL.OPERATION_FORBIDDEN, { episodeId, operation: effect.operation });
   }
   if (effect.target && authority?.targetPrefix && !effect.target.startsWith(authority.targetPrefix)) {
-    throw new Error(`Effect target is outside authority scope: ${effect.target}`);
+    throw new ControlDenial(DENIAL.TARGET_OUTSIDE_AUTHORITY, { episodeId, target: effect.target, targetPrefix: authority.targetPrefix });
   }
   return { admitted: true, episodeId, effect };
 }
 
 export function validateEpisodeClosure(state, episodeId) {
   const episode = profileRoot(state, episodeId);
-  if (episode.kind !== "execution_episode") throw new Error("Closure requires an execution episode");
+  if (episode.kind !== "execution_episode") throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { episodeId, kind: episode.kind, reason: "not_execution_episode" });
   validateProfile(state, episodeId);
   if (!profileRole(state, episodeId, "outcome", "commitment")) {
-    throw new Error(`Episode ${episodeId} requires an outcome before closure`);
+    throw new ControlDenial(DENIAL.EPISODE_OUTCOME_MISSING, { episodeId });
   }
 
   const obligations = relationshipsForRole(state, episodeId, "proof_obligation");
   for (const obligation of obligations) {
-    if (obligation.targetType !== "unit") throw new Error(`Episode ${episodeId} has an invalid proof obligation`);
+    if (obligation.targetType !== "unit") throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { episodeId, obligationId: obligation.id, reason: "invalid_proof_obligation" });
     const evaluation = state.units.get(obligation.targetId);
-    if (!evaluation || evaluation.kind !== "evaluation") throw new Error(`Episode ${episodeId} has an invalid evaluation obligation`);
+    if (!evaluation || evaluation.kind !== "evaluation") throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { episodeId, obligationId: obligation.id, reason: "invalid_evaluation_obligation" });
     validateProfile(state, evaluation.id);
     const result = profileRole(state, evaluation.id, "result", "commitment");
     const coverage = profileRole(state, evaluation.id, "coverage", "commitment");
-    if (!result || result.value !== "satisfied") throw new Error(`Episode ${episodeId} has an unsatisfied proof obligation`);
-    if (!coverage || coverage.value !== "complete") throw new Error(`Episode ${episodeId} has insufficient proof coverage`);
+    if (!result || result.value !== "satisfied") throw new ControlDenial(DENIAL.EVALUATION_NOT_SATISFIED, { episodeId, evaluationId: evaluation.id });
+    if (!coverage || coverage.value !== "complete") throw new ControlDenial(DENIAL.COVERAGE_INCOMPLETE, { episodeId, evaluationId: evaluation.id });
     if (evaluation.freshness === "stale" || evaluation.evaluationFailed) {
-      throw new Error(`Episode ${episodeId} has stale or failed evaluation evidence`);
+      throw new ControlDenial(DENIAL.EVALUATION_STALE, { episodeId, evaluationId: evaluation.id });
     }
   }
   return { closable: true, episodeId };
@@ -252,12 +304,12 @@ export class Workspace {
       const lines = (await readFile(join(this.events, file), "utf8")).trim().split("\n").filter(Boolean);
       const transaction = lines.map((line) => JSON.parse(line));
       if (!transaction.length || transaction.at(-1).type !== "transaction.commit") {
-        throw new Error(`Uncommitted event segment: ${file}`);
+        throw new ControlDenial(DENIAL.SEGMENT_COMMIT_MARKER_MISSING, { file });
       }
       const commit = transaction.at(-1).value;
       const operations = transaction.slice(0, -1);
       if (digest(JSON.stringify(operations)) !== commit.operationsDigest) {
-        throw new Error(`Corrupt event segment: ${file}`);
+        throw new ControlDenial(DENIAL.SEGMENT_DIGEST_MISMATCH, { file });
       }
       for (const operation of operations) applyOperation(this.state, operation);
       this.heads.push(commit.transactionId);
@@ -266,7 +318,7 @@ export class Workspace {
   }
 
   async transact(operations, { profileIds = [], actorId = "human" } = {}) {
-    if (!operations.length) throw new Error("Transaction must contain operations");
+    if (!operations.length) throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { reason: "empty_transaction" });
     const next = restoreState(cloneState(this.state));
     for (const operation of operations) applyOperation(next, operation);
     for (const profileId of profileIds) validateProfile(next, profileId);

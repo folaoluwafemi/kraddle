@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { Workspace, admitEffect, id, validateEpisodeClosure, validateProfile } from "../src/kernel.js";
+import { DENIAL, Workspace, admitEffect, id, validateEpisodeClosure, validateProfile } from "../src/kernel.js";
 
 const unit = (id, kind, title = kind) => ({ id, kind, title });
 const commitment = (id, value, type = "statement") => ({ id, type, value });
@@ -51,7 +51,7 @@ test("rejects a blocking control without an evaluator", async () => {
     await assert.rejects(() => store.transact([
       { type: "unit.create", value: unit(profile, "control_binding") },
       { type: "commitment.create", value: commitment(id(), "commitment") },
-    ], { profileIds: [profile] }), /governed_commitment/);
+    ], { profileIds: [profile] }), (e) => e.code === DENIAL.ENVELOPE_INVALID);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -86,7 +86,7 @@ test("rejects invalid evaluation results", () => {
     evidence: new Map(),
     scopes: new Map([["scope", { id: "scope" }]]),
   };
-  assert.throws(() => validateProfile(state, "p"), /invalid evaluation result/);
+  assert.throws(() => validateProfile(state, "p"), (e) => e.code === DENIAL.EVALUATION_RESULT_INVALID);
 });
 
 test("denies effects outside an episode authority envelope", () => {
@@ -114,8 +114,8 @@ test("denies effects outside an episode authority envelope", () => {
     scopes: new Map([["scope", { id: "scope" }]]),
   };
   assert.deepEqual(admitEffect(state, "episode", { operation: "write", target: "src/research/context.ts" }).admitted, true);
-  assert.throws(() => admitEffect(state, "episode", { operation: "write", target: "src/ui/App.tsx" }), /outside authority scope/);
-  assert.throws(() => admitEffect(state, "episode", { operation: "execute", target: "src/research/run.js" }), /not authorized/);
+  assert.throws(() => admitEffect(state, "episode", { operation: "write", target: "src/ui/App.tsx" }), (e) => e.code === DENIAL.TARGET_OUTSIDE_AUTHORITY);
+  assert.throws(() => admitEffect(state, "episode", { operation: "execute", target: "src/research/run.js" }), (e) => e.code === DENIAL.OPERATION_NOT_AUTHORIZED);
 });
 
 test("does not close an episode without an outcome", () => {
@@ -138,5 +138,5 @@ test("does not close an episode without an outcome", () => {
     evidence: new Map(),
     scopes: new Map([["scope", { id: "scope" }]]),
   };
-  assert.throws(() => validateEpisodeClosure(state, "episode"), /requires an outcome/);
+  assert.throws(() => validateEpisodeClosure(state, "episode"), (e) => e.code === DENIAL.EPISODE_OUTCOME_MISSING);
 });
