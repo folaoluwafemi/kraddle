@@ -56,45 +56,6 @@ const episodeFixtureOperations = ({ authority = {}, episode = {} } = {}) => {
   ];
 };
 
-const cases = [
-  ["AD-01", "narrow context cannot omit an applicable prohibition", "resolveApplicableContext"],
-  ["AD-02", "an actor cannot change its own governing control", "authorizeMutation"],
-  ["AD-03", "evaluator failure cannot satisfy a blocking obligation", "evaluate"],
-  ["AD-04", "coverage cannot exclude changed files", "validateCoverage"],
-  ["AD-05", "a base-revision evaluation cannot close a later revision", "validateEpisodeClosure"],
-  ["AD-06", "an ambiguous anchor pauses affected execution", "invalidateForAnchorRemap"],
-  ["AD-07", "unknown control extensions cannot authorize execution", "validateExtensionCapabilities"],
-  ["AD-08", "concurrent governing heads block execution", "resolveHeads"],
-  ["AD-09", "an exception request is not an exception authorization", "authorizeException"],
-  ["AD-10", "effects cannot be documented after bypassing admission", "admitEffect"],
-  ["AD-11", "an evaluator parse failure is never a pass", "evaluate"],
-  ["AD-12", "an incomplete profile transaction is never projected", "load"],
-  ["AD-13", "revoked authority suspends the next effect", "admitEffect"],
-  ["AD-14", "an expired exception suspends the next effect", "admitEffect"],
-  ["AD-15", "delayed invalidation cannot preserve stale authorization", "validateDependencies"],
-];
-
-function requireCapability(name) {
-  assert.equal(
-    typeof kernel[name],
-    "function",
-    `Phase 0 capability missing: ${name}`,
-  );
-  return kernel[name];
-}
-
-for (const [id, description, capability] of cases) {
-  test(`${id}: ${description}`, () => {
-    requireCapability(capability);
-  });
-}
-
-test("adversarial manifest contains all cases in order", () => {
-  assert.deepEqual(cases.map(([id]) => id), Array.from({ length: 15 }, (_, index) => `AD-${String(index + 1).padStart(2, "0")}`));
-});
-
-export { cases };
-
 test("AD-12: an interrupted transaction is never projected", async () => {
   const root = await mkdtemp(join(tmpdir(), "kraddle-"));
   try {
@@ -108,6 +69,11 @@ test("AD-12: an interrupted transaction is never projected", async () => {
     await sleep(3);
     const t3 = id();
     await store.transact([{ type: "unit.create", value: unitRecord(t3) }]);
+
+    const pristine = new Workspace(root);
+    const pristineResult = await pristine.load();
+    assert.equal(pristineResult.trusted, true);
+    assert.equal(pristineResult.projectedThrough, 3);
 
     const eventsDir = join(root, ".kraddle", "events");
     const files = (await readdir(eventsDir)).filter((name) => name.endsWith(".krd")).sort();
@@ -236,6 +202,10 @@ test("AD-13: revoked authority suspends the next effect", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+
+  const active = episodeState({ authority: { operations: ["write"] } });
+  assert.equal(admitEffect(active, "EP1", { operation: "write", target: "src/domain/a.ts" }).admitted, true);
+  assert.equal(episodeStatus(active, "EP1"), "running");
 });
 
 const coverageObject = (over = {}) => {
@@ -405,6 +375,11 @@ test("AD-03: an evaluator failure cannot satisfy a blocking obligation", () => {
     assert.notEqual(e.code, DENIAL.EVALUATION_NOT_SATISFIED);
     return true;
   });
+
+  const satisfiedClosure = closureState({
+    evaluation: { stateRef: { repository: "repo", revision: "rev-b", contentDigest: "digest-b" } },
+  });
+  assert.deepEqual(validateEpisodeClosure(satisfiedClosure, "EP1"), { closable: true, episodeId: "EP1" });
 });
 
 test("AD-11: an evaluator parse failure is never a pass", async () => {
@@ -424,6 +399,17 @@ test("AD-11: an evaluator parse failure is never a pass", async () => {
   assert.notEqual(ev.result, "satisfied");
   assert.ok(ev.error);
   assert.equal(ev.error.message, "unexpected token");
+
+  const healthy = await evaluate(emptyState(), {
+    evaluationId: "EV2",
+    evaluatorId: "evaluator-1",
+    evaluatorVersion: "1.2.3",
+    subjects: ["src/domain/a.ts"],
+    stateRef,
+    run: async () => ({ result: "satisfied", coverage: coverageObject() }),
+  });
+  assert.equal(healthy.result, "satisfied");
+  assert.equal(healthy.error, undefined);
 
   const attached = closureState({ resultValue: ev.result });
   attached.units.set("EV1", { ...ev });
@@ -590,3 +576,10 @@ test("AD-10: effects cannot be documented after bypassing admission", () => {
   });
   assert.deepEqual(validateEpisodeClosure(controlled, "EP1"), { closable: true, episodeId: "EP1" });
 });
+
+test.todo("AD-06: ambiguous anchor pauses affected execution — blocked on code anchor subsystem");
+test.todo("AD-07: unknown control extension cannot authorize — blocked on schema capability negotiation (P9)");
+test.todo("AD-08: concurrent governing heads block execution — blocked on causal clocks and heads (P3)");
+test.todo("AD-09: exception request is not authorization — blocked on exception subsystem (P7)");
+test.todo("AD-14: expired exception suspends next effect — blocked on exception subsystem (P7)");
+test.todo("AD-15: delayed invalidation cannot preserve stale authorization — blocked on typed invalidation (P6)");
