@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import * as kernel from "../src/kernel.js";
 
-const { DENIAL, Workspace, admitEffect, computeCoverageDigest, emptyState, episodeStatus, id, validateCoverage, validateEpisodeClosure } = kernel;
+const { DENIAL, Workspace, admitEffect, computeCoverageDigest, emptyState, episodeStatus, evaluate, id, validateCoverage, validateEpisodeClosure } = kernel;
 
 const env = (over = {}) => ({
   origin: "human", epistemic_basis: "asserted",
@@ -250,7 +250,7 @@ const coverageObject = (over = {}) => {
   return { ...coverage, coverageDigest: computeCoverageDigest(coverage) };
 };
 
-function closureState({ episode = {}, evaluation = {} } = {}) {
+function closureState({ episode = {}, evaluation = {}, resultValue = "satisfied" } = {}) {
   const state = emptyState();
   state.units.set("EP1", {
     id: "EP1", kind: "execution_episode", lifecycle: "running",
@@ -274,7 +274,7 @@ function closureState({ episode = {}, evaluation = {} } = {}) {
   state.commitments.set("target-c", commitmentRecord("target-c", "domain must not import ui"));
   state.units.set("selector-u", unitRecord("selector-u", "selector"));
   state.units.set("evaluator-u", unitRecord("evaluator-u", "evaluator"));
-  state.commitments.set("result-c", commitmentRecord("result-c", "satisfied"));
+  state.commitments.set("result-c", commitmentRecord("result-c", resultValue));
   state.commitments.set("coverage-c", commitmentRecord("coverage-c", "complete"));
   const edges = [
     ["ep-purpose", "EP1", "purpose", "purpose-c", "commitment"],
@@ -393,4 +393,74 @@ test("AD-04: coverage cannot exclude changed files", () => {
     () => validateEpisodeClosure(insufficient, "EP1"),
     (e) => e.code === DENIAL.COVERAGE_INCOMPLETE,
   );
+});
+
+test("AD-03: an evaluator failure cannot satisfy a blocking obligation", () => {
+  const failed = closureState({
+    resultValue: "evaluation_failed",
+    evaluation: { stateRef: { repository: "repo", revision: "rev-b", contentDigest: "digest-b" } },
+  });
+  assert.throws(() => validateEpisodeClosure(failed, "EP1"), (e) => {
+    assert.equal(e.code, DENIAL.EVALUATION_FAILED_NOT_A_PASS);
+    assert.notEqual(e.code, DENIAL.EVALUATION_NOT_SATISFIED);
+    return true;
+  });
+});
+
+test("AD-11: an evaluator parse failure is never a pass", async () => {
+  const stateRef = { repository: "repo", revision: "rev-b", contentDigest: "digest-b" };
+  const run = () => {
+    throw new SyntaxError("unexpected token");
+  };
+  const ev = await evaluate(emptyState(), {
+    evaluationId: "EV1",
+    evaluatorId: "evaluator-1",
+    evaluatorVersion: "1.2.3",
+    subjects: ["src/domain/a.ts"],
+    stateRef,
+    run,
+  });
+  assert.equal(ev.result, "evaluation_failed");
+  assert.notEqual(ev.result, "satisfied");
+  assert.ok(ev.error);
+  assert.equal(ev.error.message, "unexpected token");
+
+  const attached = closureState({ resultValue: ev.result });
+  attached.units.set("EV1", { ...ev });
+  assert.throws(
+    () => validateEpisodeClosure(attached, "EP1"),
+    (e) => e.code === DENIAL.EVALUATION_FAILED_NOT_A_PASS,
+  );
+
+  const root = await mkdtemp(join(tmpdir(), "kraddle-"));
+  try {
+    const store = new Workspace(root);
+    await store.init();
+    await store.transact([
+      { type: "unit.create", value: { ...ev } },
+      { type: "commitment.create", value: commitmentRecord("target-c", "domain must not import ui") },
+      { type: "unit.create", value: unitRecord("selector-u", "selector") },
+      { type: "scope.create", value: { id: "scope-r", kind: "scope", ...env() } },
+      { type: "unit.create", value: unitRecord("evaluator-u", "evaluator") },
+      { type: "commitment.create", value: commitmentRecord("result-c", ev.result) },
+      { type: "commitment.create", value: commitmentRecord("coverage-c", "typed") },
+      { type: "relationship.add", value: rel("ev-target", "EV1", "target_commitment", "target-c", "commitment") },
+      { type: "relationship.add", value: rel("ev-selector", "EV1", "target_selector", "selector-u", "unit") },
+      { type: "relationship.add", value: rel("ev-scope", "EV1", "source_scope", "scope-r", "scope") },
+      { type: "relationship.add", value: rel("ev-evaluator", "EV1", "evaluator", "evaluator-u", "unit") },
+      { type: "relationship.add", value: rel("ev-result", "EV1", "result", "result-c", "commitment") },
+      { type: "relationship.add", value: rel("ev-coverage", "EV1", "coverage", "coverage-c", "commitment") },
+    ], { profileIds: ["EV1"] });
+    const reloaded = new Workspace(root);
+    const result = await reloaded.load();
+    const persisted = result.state.units.get("EV1");
+    assert.equal(persisted.result, "evaluation_failed");
+    assert.equal(persisted.evaluatorId, "evaluator-1");
+    assert.equal(persisted.evaluatorVersion, "1.2.3");
+    assert.deepEqual(persisted.stateRef, stateRef);
+    assert.deepEqual(persisted.subjects, ["src/domain/a.ts"]);
+    assert.equal(persisted.error.message, "unexpected token");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

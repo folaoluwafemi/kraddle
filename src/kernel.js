@@ -404,6 +404,63 @@ export function validateCoverage(coverage, { permittedExclusions = [] } = {}) {
   return { sufficient: true };
 }
 
+export async function evaluate(state, {
+  evaluationId, evaluatorId, evaluatorVersion, subjects, stateRef, run, workspace,
+} = {}) {
+  if (workspace !== undefined) requireTrustedProjection(workspace);
+  const subjectList = Array.isArray(subjects) ? [...subjects] : [];
+  let result;
+  let coverage;
+  let error;
+  try {
+    const outcome = await run(subjectList);
+    if (outcome && EVALUATION_RESULTS.has(outcome.result)) {
+      result = outcome.result;
+      coverage = outcome.coverage;
+    } else {
+      result = "evaluation_failed";
+      error = {
+        name: "UnrecognizedResult",
+        message: "evaluator returned a result outside the result algebra",
+        value: outcome?.result,
+      };
+    }
+  } catch (thrown) {
+    result = "evaluation_failed";
+    error = thrown instanceof Error
+      ? { name: thrown.name, message: thrown.message }
+      : { name: "ThrownValue", message: String(thrown) };
+  }
+  let finalCoverage = coverage;
+  if (result === "evaluation_failed") {
+    finalCoverage = {
+      requiredSubjects: [...subjectList],
+      coveredSubjects: [],
+      unknownSubjects: [...subjectList],
+      excludedSubjects: [],
+      selectionMethod: "evaluator_run_failed",
+    };
+    finalCoverage.coverageDigest = computeCoverageDigest(finalCoverage);
+  }
+  const record = {
+    id: evaluationId,
+    kind: "evaluation",
+    origin: "extractor",
+    epistemic_basis: "derived",
+    approval_state: "proposed",
+    freshness_state: "current",
+    recorded_at: Date.now(),
+    evaluatorId,
+    evaluatorVersion,
+    subjects: subjectList,
+    stateRef,
+    result,
+    coverage: finalCoverage,
+  };
+  if (error !== undefined) record.error = error;
+  return record;
+}
+
 export function validateEpisodeClosure(state, episodeId, workspace) {
   if (workspace !== undefined) requireTrustedProjection(workspace);
   const episode = profileRoot(state, episodeId);
@@ -429,6 +486,9 @@ export function validateEpisodeClosure(state, episodeId, workspace) {
     validateProfile(state, evaluation.id);
     if (evaluation.stateRef !== undefined) validateStateReference(evaluation.stateRef);
     const result = profileRole(state, evaluation.id, "result", "commitment");
+    if (result?.value === "evaluation_failed") {
+      throw new ControlDenial(DENIAL.EVALUATION_FAILED_NOT_A_PASS, { episodeId, evaluationId: evaluation.id });
+    }
     if (episode.resultingStateRef) {
       const ref = evaluation.stateRef;
       const fields = [];
@@ -447,7 +507,7 @@ export function validateEpisodeClosure(state, episodeId, workspace) {
     }
     if (!result || result.value !== "satisfied") throw new ControlDenial(DENIAL.EVALUATION_NOT_SATISFIED, { episodeId, evaluationId: evaluation.id });
     validateCoverage(evaluation.coverage, { permittedExclusions: episode.permittedExclusions ?? [] });
-    if (evaluation.freshness === "stale" || evaluation.evaluationFailed) {
+    if (evaluation.freshness_state === "stale" || evaluation.freshness_state === "expired") {
       throw new ControlDenial(DENIAL.EVALUATION_STALE, { episodeId, evaluationId: evaluation.id });
     }
   }
