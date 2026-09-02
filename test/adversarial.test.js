@@ -272,6 +272,7 @@ test("AD-05: a base-revision evaluation cannot close a later revision", () => {
   const mismatched = closureState({
     evaluation: { stateRef: { repository: "repo", revision: "rev-a", contentDigest: "digest-a" } },
   });
+  admitEffect(mismatched, "EP1", { operation: "write", target: "src/domain/a.ts" });
   assert.throws(() => validateEpisodeClosure(mismatched, "EP1"), (e) => {
     assert.equal(e.code, DENIAL.EVALUATION_REVISION_MISMATCH);
     assert.equal(e.detail.evaluated, "rev-a");
@@ -282,6 +283,7 @@ test("AD-05: a base-revision evaluation cannot close a later revision", () => {
   const digestMismatch = closureState({
     evaluation: { stateRef: { repository: "repo", revision: "rev-b", contentDigest: "digest-x" } },
   });
+  admitEffect(digestMismatch, "EP1", { operation: "write", target: "src/domain/a.ts" });
   assert.throws(() => validateEpisodeClosure(digestMismatch, "EP1"), (e) => {
     assert.equal(e.code, DENIAL.EVALUATION_REVISION_MISMATCH);
     assert.deepEqual(e.detail.fields, ["contentDigest"]);
@@ -291,6 +293,7 @@ test("AD-05: a base-revision evaluation cannot close a later revision", () => {
   const matched = closureState({
     evaluation: { stateRef: { repository: "repo", revision: "rev-b", contentDigest: "digest-b" } },
   });
+  admitEffect(matched, "EP1", { operation: "write", target: "src/domain/a.ts" });
   assert.deepEqual(validateEpisodeClosure(matched, "EP1"), { closable: true, episodeId: "EP1" });
 });
 
@@ -359,6 +362,7 @@ test("AD-04: coverage cannot exclude changed files", () => {
       coverage: withDigest(),
     },
   });
+  admitEffect(insufficient, "EP1", { operation: "write", target: "src/domain/a.ts" });
   assert.throws(
     () => validateEpisodeClosure(insufficient, "EP1"),
     (e) => e.code === DENIAL.COVERAGE_INCOMPLETE,
@@ -370,6 +374,7 @@ test("AD-03: an evaluator failure cannot satisfy a blocking obligation", () => {
     resultValue: "evaluation_failed",
     evaluation: { stateRef: { repository: "repo", revision: "rev-b", contentDigest: "digest-b" } },
   });
+  admitEffect(failed, "EP1", { operation: "write", target: "src/domain/a.ts" });
   assert.throws(() => validateEpisodeClosure(failed, "EP1"), (e) => {
     assert.equal(e.code, DENIAL.EVALUATION_FAILED_NOT_A_PASS);
     assert.notEqual(e.code, DENIAL.EVALUATION_NOT_SATISFIED);
@@ -379,6 +384,7 @@ test("AD-03: an evaluator failure cannot satisfy a blocking obligation", () => {
   const satisfiedClosure = closureState({
     evaluation: { stateRef: { repository: "repo", revision: "rev-b", contentDigest: "digest-b" } },
   });
+  admitEffect(satisfiedClosure, "EP1", { operation: "write", target: "src/domain/a.ts" });
   assert.deepEqual(validateEpisodeClosure(satisfiedClosure, "EP1"), { closable: true, episodeId: "EP1" });
 });
 
@@ -413,6 +419,7 @@ test("AD-11: an evaluator parse failure is never a pass", async () => {
 
   const attached = closureState({ resultValue: ev.result });
   attached.units.set("EV1", { ...ev });
+  admitEffect(attached, "EP1", { operation: "write", target: "src/domain/a.ts" });
   assert.throws(
     () => validateEpisodeClosure(attached, "EP1"),
     (e) => e.code === DENIAL.EVALUATION_FAILED_NOT_A_PASS,
@@ -554,6 +561,19 @@ test("a fully pinned evidence record cannot pin a context when revision is omitt
   const result = resolveApplicableContext(state, { dependencyEvidenceId: "EV-FULL" });
   assert.equal(result.complete, false);
   assert.ok(result.incompleteReasons.includes(DENIAL.EVIDENCE_PIN_MISMATCH));
+});
+
+test("an episode without effects must explicitly declare no-op", () => {
+  const state = closureState({});
+  assert.throws(
+    () => validateEpisodeClosure(state, "EP1"),
+    (e) => e.code === DENIAL.NO_OP_NOT_DECLARED,
+  );
+});
+
+test("a declared no-op episode with a satisfied obligation closes", () => {
+  const state = closureState({ episode: { noOp: true } });
+  assert.deepEqual(validateEpisodeClosure(state, "EP1"), { closable: true, episodeId: "EP1" });
 });
 
 test("AD-10: effects cannot be documented after bypassing admission", () => {

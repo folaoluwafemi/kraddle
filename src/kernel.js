@@ -66,6 +66,7 @@ export const DENIAL = Object.freeze({
   PROJECTION_UNTRUSTED:             "PROJECTION_UNTRUSTED",
   EVIDENCE_PIN_MISMATCH:            "EVIDENCE_PIN_MISMATCH",
   WORKSPACE_EXISTS:                 "WORKSPACE_EXISTS",
+  NO_OP_NOT_DECLARED:               "NO_OP_NOT_DECLARED",
 });
 
 function profileRoot(state, profileId) {
@@ -593,6 +594,9 @@ export function validateEpisodeClosure(state, episodeId, workspace) {
     (Array.isArray(episode.observedEffects) && episode.observedEffects.length > 0);
   if (hasEffects && !episode.resultingStateRef) {
     throw new ControlDenial(DENIAL.EVALUATION_REVISION_MISMATCH, { episodeId, reason: "resulting_state_missing" });
+  }
+  if (!hasEffects && episode.noOp !== true) {
+    throw new ControlDenial(DENIAL.NO_OP_NOT_DECLARED, { episodeId });
   }
   for (const observed of episode.observedEffects ?? []) {
     const classification = classifyEffect(state, episodeId, observed);
