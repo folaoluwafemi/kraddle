@@ -18,12 +18,14 @@ intent
 
 ## Current Status
 
-Kraddle is in **architecture and adversarial-prototype design**. The repository currently contains:
+Kraddle is in **implementation of the Phase 0/0.5 control kernel**. The repository currently contains:
 
 - The evolving theory and checkpoints in `contexts/`.
 - The canonical terminology and format reference in `docs/`.
-- A small Phase 0 kernel runtime exists in `src/kernel.js`, with tests in `test/kernel.test.js`.
-- The runtime currently uses readable JSON-lines event segments as a temporary encoding; KRD binary encoding, repository analysis, and the full control runtime remain unimplemented.
+- A working Phase 0/0.5 kernel runtime in `src/kernel.js`: envelope validation, committed transactions, quarantine-on-corruption, default-deny mutation authorization, effect admission, revision-pinned closure, typed coverage, and the two-block demo (`test/demo.test.js`).
+- A regex dependency extractor (`src/extract.js`) and architecture-rule evaluator (`src/evaluators.js`).
+- Test suite: `npm test` reports 44 pass / 6 todo / 0 fail. Six adversarial cases (AD-06..AD-09, AD-14, AD-15) are deferred with stated blockers.
+- KRD binary encoding, repository analysis, agent-facing surface, and sync remain unimplemented.
 
 Maturity labels used throughout the project:
 
@@ -293,12 +295,16 @@ Start with `docs/index.html`, then read `contexts/profile_definition_metamodel_2
 
 Kraddle does not promise that control never decays in an open, changing system. It aims to **bound control decay, make remaining uncertainty visible, and prevent silent movement beyond known context, evidence, or authority**.
 
-Achievable guarantees include:
+Achievable guarantees, with current maturity:
 
-- No silent promotion of inference to accepted meaning.
-- No silent omission of known applicable commitments.
-- No silent execution outside delegated authority.
-- No silent success when required evaluation failed or did not run.
-- No silent reliance on stale evidence.
-- No silent waiver of violations.
-- No silent completeness claim beyond a declared boundary.
+| Guarantee | Maturity |
+| --- | --- |
+| No silent promotion of inference to accepted meaning | **Verified** (envelope + acceptance authority, test/envelope.test.js) |
+| No silent omission of known applicable commitments | **Verified** (resolver, AD-01) |
+| No silent execution outside delegated authority | **Verified at admission** (AD-02/AD-13; perimeter is advisory — no sandbox yet) |
+| No silent success when required evaluation failed or did not run | **Verified** (AD-03/AD-11) |
+| No silent reliance on stale evidence | **Verified for revision binding** (AD-05); general invalidation is unimplemented |
+| No silent waiver of violations | **Specified, not implemented** (exception subsystem deferred) |
+| No silent completeness claim beyond a declared boundary | **Verified for the Phase 0 decidable subset** (AD-01, typed coverage) |
+
+Additional stated limitations: the admission perimeter is advisory (an agent can still write files directly — detection, not prevention); the event log is rename-atomic but not fsync-durable; dependency extraction is regex-based and can under-extract, which the evaluator treats as unknowns that block closure.

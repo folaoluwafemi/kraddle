@@ -313,8 +313,8 @@ profile_id = root_unit_id</code><button class="copy-button" aria-label="Copy cod
 
         <section class="doc-section" id="adversarial" data-title="Adversarial checks">
           <p class="eyebrow">ARCHITECTURE / VERIFICATION</p><h1>Adversarial checks</h1>
-          <p class="lead">These checks are specified now and become executable when the control runtime exists. They attack silent control loss, not ordinary happy-path behavior.</p>
-          <div class="note"><span class="note-icon">i</span><div><strong>Current maturity: specified, not verified</strong><p>No Kraddle runtime exists yet. These are the conformance fixtures the first implementation must pass.</p></div></div>
+          <p class="lead">These checks attack silent control loss, not ordinary happy-path behavior. Nine of fifteen are now executable conformance tests in the Phase 0 runtime.</p>
+          <div class="note"><span class="note-icon">i</span><div><strong>Current maturity: 9 of 15 verified, 6 deferred</strong><p>A Phase 0 runtime exists (<code>src/kernel.js</code>, JSON-lines encoding). AD-01 through AD-05 and AD-10 through AD-13 pass as behavioral conformance tests. AD-06..AD-09, AD-14, AD-15 are deferred with stated blockers (anchor subsystem, capability negotiation, causal heads, exceptions, typed invalidation).</p></div></div>
           <div class="property-table">
             <div><code>AD-01</code><span>Narrow context excludes an applicable prohibition → reject or mark incomplete.</span></div>
             <div><code>AD-02</code><span>Acting agent changes its own architecture rule → deny by authority.</span></div>
@@ -385,6 +385,7 @@ logical_time      causal ordering clock
 causal_parents    zero or more event IDs
 payload           record operations
 schema_version    encoding schema</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
+          <div class="note"><span class="note-icon">i</span><div><strong>Current maturity: partially implemented</strong><p>The implemented runtime writes JSON-lines event segments with <code>event_id</code>, <code>workspace_id</code>, <code>actor_id</code>, and <code>payload</code>. <code>logical_time</code> and <code>causal_parents</code> are not implemented; ordering is lexical segment order (single writer, single device). Transactions are atomic by rename but not fsync-durable.</p></div></div>
         </section>
 
         <section class="doc-section" id="encoding" data-title="Binary encoding">
