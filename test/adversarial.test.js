@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import * as kernel from "../src/kernel.js";
 
-const { DENIAL, Workspace, id } = kernel;
+const { DENIAL, Workspace, admitEffect, emptyState, episodeStatus, id } = kernel;
 
 const env = (over = {}) => ({
   origin: "human", epistemic_basis: "asserted",
@@ -14,8 +14,47 @@ const env = (over = {}) => ({
 });
 
 const unitRecord = (recordId, kind = "behavior") => ({ id: recordId, kind, title: kind, ...env() });
+const commitmentRecord = (recordId, value, type = "statement", over = {}) => ({ id: recordId, kind: "commitment", type, value, ...env(over) });
+const rel = (recordId, profileId, role, targetId, targetType, over = {}) => ({ id: recordId, kind: "relationship", profileId, role, targetId, targetType, ...env(over) });
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function episodeState({ authority = {}, episode = {} } = {}) {
+  const state = emptyState();
+  state.units.set("EP1", { id: "EP1", kind: "execution_episode", lifecycle: "running", ...env(), ...episode });
+  state.commitments.set("purpose-c", commitmentRecord("purpose-c", "do work"));
+  state.scopes.set("scope-r", { id: "scope-r", kind: "scope", ...env() });
+  state.commitments.set("base-c", commitmentRecord("base-c", "revision-a"));
+  state.units.set("context-u", { id: "context-u", kind: "context_envelope", valid: true, completeness: "complete", ...env() });
+  state.units.set("authority-u", { id: "authority-u", kind: "authority_grant", ...env(), ...authority });
+  state.units.set("delta-u", { id: "delta-u", kind: "software_element", ...env() });
+  const edges = [
+    ["rel-purpose", "purpose", "purpose-c", "commitment"],
+    ["rel-scope", "target_scope", "scope-r", "scope"],
+    ["rel-base", "base_revision", "base-c", "commitment"],
+    ["rel-context", "context_envelope", "context-u", "unit"],
+    ["rel-authority", "authority_grant", "authority-u", "unit"],
+    ["rel-delta", "intended_delta", "delta-u", "unit"],
+  ];
+  for (const [recordId, role, targetId, targetType] of edges) {
+    state.relationships.set(recordId, rel(recordId, "EP1", role, targetId, targetType));
+  }
+  return state;
+}
+
+const episodeFixtureOperations = ({ authority = {}, episode = {} } = {}) => {
+  const state = episodeState({ authority, episode });
+  return [
+    { type: "unit.create", value: state.units.get("EP1") },
+    { type: "commitment.create", value: state.commitments.get("purpose-c") },
+    { type: "scope.create", value: state.scopes.get("scope-r") },
+    { type: "commitment.create", value: state.commitments.get("base-c") },
+    { type: "unit.create", value: state.units.get("context-u") },
+    { type: "unit.create", value: state.units.get("authority-u") },
+    { type: "unit.create", value: state.units.get("delta-u") },
+    ...[...state.relationships.values()].map((value) => ({ type: "relationship.add", value })),
+  ];
+};
 
 const cases = [
   ["AD-01", "narrow context cannot omit an applicable prohibition", "resolveApplicableContext"],
@@ -87,6 +126,113 @@ test("AD-12: an interrupted transaction is never projected", async () => {
     assert.equal(result.state.units.has(t1), true);
     assert.equal(result.state.units.has(t3), false);
     assert.equal(result.projectedThrough, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("AD-02: an agent cannot mutate its own governing control", async () => {
+  const root = await mkdtemp(join(tmpdir(), "kraddle-"));
+  try {
+    const store = new Workspace(root);
+    await store.init();
+
+    const c1 = commitmentRecord("C1", "domain must not import ui");
+    const c2 = commitmentRecord("C2", "unrelated", "statement", { approval_state: "proposed" });
+    c2.title = "unrelated commitment";
+    const authorityU = { id: "authority-u", kind: "authority_grant", operations: ["write"], allowRecordIds: [], ...env() };
+
+    await store.transact([
+      { type: "unit.create", value: unitRecord("CB1", "control_binding") },
+      { type: "commitment.create", value: c1 },
+      { type: "commitment.create", value: commitmentRecord("S1", "src/domain/") },
+      { type: "commitment.create", value: commitmentRecord("M1", "prohibition", "has_modality") },
+      { type: "unit.create", value: unitRecord("E1", "evaluator") },
+      { type: "commitment.create", value: c2 },
+      ...episodeFixtureOperations({ authority: { operations: ["write"], allowRecordIds: [] } }),
+      { type: "relationship.add", value: rel("cb-governed", "CB1", "governed_commitment", "C1", "commitment") },
+      { type: "relationship.add", value: rel("cb-selector", "CB1", "subject_selector", "S1", "commitment") },
+      { type: "relationship.add", value: rel("cb-modality", "CB1", "modality", "M1", "commitment") },
+      { type: "relationship.add", value: rel("cb-evaluator", "CB1", "evaluator", "E1", "unit") },
+    ], { profileIds: ["CB1", "EP1"] });
+
+    const eventsDir = join(root, ".kraddle", "events");
+    const countSegments = async () => (await readdir(eventsDir)).filter((name) => name.endsWith(".krd")).length;
+    const before = await countSegments();
+
+    await assert.rejects(
+      () => store.transact(
+        [{ type: "commitment.update", value: { ...c1, value: "domain may import ui" } }],
+        { actorId: "agent-1", episodeId: "EP1" },
+      ),
+      (e) => e.code === DENIAL.SELF_AMENDMENT_DENIED,
+    );
+    assert.equal(store.state.commitments.get("C1").value, "domain must not import ui");
+    assert.equal(await countSegments(), before);
+
+    await assert.rejects(
+      () => store.transact(
+        [{ type: "relationship.add", value: rel("graft-1", "CB1", "evaluator", "fake-evaluator", "unit", { approval_state: "proposed" }) }],
+        { actorId: "agent-1", episodeId: "EP1" },
+      ),
+      (e) => e.code === DENIAL.PROFILE_GRAFT_DENIED,
+    );
+    const evaluatorEdges = [...store.state.relationships.values()].filter((r) => r.profileId === "CB1" && r.role === "evaluator");
+    assert.equal(evaluatorEdges.length, 1);
+    assert.equal(evaluatorEdges[0].targetId, "E1");
+    assert.equal(await countSegments(), before);
+
+    await assert.rejects(
+      () => store.transact(
+        [{ type: "commitment.update", value: { ...c2, value: "agent edit" } }],
+        { actorId: "agent-1", episodeId: "EP1" },
+      ),
+      (e) => e.code === DENIAL.MUTATION_NOT_AUTHORIZED,
+    );
+    assert.equal(await countSegments(), before);
+
+    await store.transact([{ type: "unit.update", value: { ...authorityU, allowRecordIds: ["C2"] } }]);
+    const transactionId = await store.transact(
+      [{ type: "commitment.update", value: { ...c2, title: "renamed by agent" } }],
+      { actorId: "agent-1", episodeId: "EP1" },
+    );
+    assert.ok(transactionId);
+    assert.equal(store.state.commitments.get("C2").title, "renamed by agent");
+    assert.notEqual(store.state.commitments.get("C2").approval_state, "accepted");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("AD-13: revoked authority suspends the next effect", async () => {
+  const state = episodeState({ authority: { operations: ["write"], revoked: true } });
+  assert.throws(
+    () => admitEffect(state, "EP1", { operation: "write", target: "src/domain/a.ts" }),
+    (e) => e.code === DENIAL.AUTHORITY_REVOKED,
+  );
+  assert.equal(episodeStatus(state, "EP1"), "suspended");
+  assert.equal(state.units.get("EP1").lifecycle, "running");
+
+  const regression = episodeState({
+    authority: {},
+    episode: { allowedOperations: ["write"] },
+  });
+  assert.throws(
+    () => admitEffect(regression, "EP1", { operation: "write", target: "src/domain/a.ts" }),
+    (e) => e.code === DENIAL.AUTHORITY_MISSING_OPERATIONS,
+  );
+
+  const root = await mkdtemp(join(tmpdir(), "kraddle-"));
+  try {
+    const store = new Workspace(root);
+    await store.init();
+    await store.transact(
+      episodeFixtureOperations({ authority: { operations: ["write"], revoked: true } }),
+      { profileIds: ["EP1"] },
+    );
+    const reloaded = new Workspace(root);
+    const result = await reloaded.load();
+    assert.equal(episodeStatus(result.state, "EP1"), "suspended");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

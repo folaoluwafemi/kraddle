@@ -232,6 +232,78 @@ export function requireTrustedProjection(workspace) {
   }
 }
 
+function authorityGrantIds(state, episodeId) {
+  const ids = new Set();
+  for (const edge of relationshipsForRole(state, episodeId, "authority_grant")) {
+    ids.add(edge.targetId);
+    for (const rel of state.relationships.values()) {
+      if (rel.profileId === edge.targetId) ids.add(rel.targetId);
+    }
+  }
+  return ids;
+}
+
+export function governingRecordIds(state, episodeId) {
+  const ids = new Set();
+  for (const unit of state.units.values()) {
+    if (unit.kind === "control_binding" && unit.approval_state === "accepted") ids.add(unit.id);
+  }
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const edge of state.relationships.values()) {
+      if (ids.has(edge.profileId) && !ids.has(edge.targetId)) {
+        ids.add(edge.targetId);
+        grew = true;
+      }
+    }
+  }
+  for (const id of authorityGrantIds(state, episodeId)) ids.add(id);
+  return ids;
+}
+
+export function authorizeMutation(state, { actorId, operation, targetId, episodeId }) {
+  const governing = governingRecordIds(state, episodeId);
+  const type = operation?.type;
+
+  if ((type === "relationship.add" || type === "relationship.update") && governing.has(operation.value?.profileId)) {
+    throw new ControlDenial(DENIAL.PROFILE_GRAFT_DENIED, { actorId, profileId: operation.value.profileId, episodeId });
+  }
+  for (const authorityId of authorityGrantIds(state, episodeId)) {
+    if (authorityId === targetId) {
+      throw new ControlDenial(DENIAL.AUTHORITY_SELF_AMENDMENT_DENIED, { actorId, targetId, episodeId });
+    }
+  }
+  if (governing.has(targetId)) {
+    throw new ControlDenial(DENIAL.SELF_AMENDMENT_DENIED, { actorId, targetId, episodeId });
+  }
+  if (
+    type === "unit.create" || type === "commitment.create" || type === "relationship.add" ||
+    type === "evidence.create" || type === "scope.create"
+  ) {
+    return { authorized: true };
+  }
+  if (
+    type === "unit.update" || type === "commitment.update" || type === "relationship.update" ||
+    type === "evidence.update" || type === "scope.update" || type === "unit.tombstone"
+  ) {
+    const authority = profileRole(state, episodeId, "authority_grant", "unit");
+    const allowed = Array.isArray(authority?.allowRecordIds) ? authority.allowRecordIds : [];
+    if (allowed.includes(targetId)) return { authorized: true };
+    throw new ControlDenial(DENIAL.MUTATION_NOT_AUTHORIZED, { actorId, targetId, episodeId });
+  }
+  throw new ControlDenial(DENIAL.MUTATION_NOT_AUTHORIZED, { actorId, targetId, episodeId, type });
+}
+
+export function episodeStatus(state, episodeId) {
+  const episode = profileRoot(state, episodeId);
+  const authority = profileRole(state, episodeId, "authority_grant", "unit");
+  if (authority?.revoked === true || (authority?.expiresAt && authority.expiresAt <= Date.now())) {
+    return "suspended";
+  }
+  return profileState(episode);
+}
+
 export function admitEffect(state, episodeId, effect, workspace) {
   if (workspace !== undefined) requireTrustedProjection(workspace);
   const episode = profileRoot(state, episodeId);
@@ -246,7 +318,10 @@ export function admitEffect(state, episodeId, effect, workspace) {
   if (context?.valid === false || context?.completeness === "incomplete") {
     throw new ControlDenial(DENIAL.CONTEXT_INCOMPLETE, { episodeId });
   }
-  if (authority?.revoked || (authority?.expiresAt && authority.expiresAt <= Date.now())) {
+  if (authority?.revoked === true) {
+    throw new ControlDenial(DENIAL.AUTHORITY_REVOKED, { episodeId });
+  }
+  if (authority?.expiresAt && authority.expiresAt <= Date.now()) {
     throw new ControlDenial(DENIAL.AUTHORITY_EXPIRED, { episodeId });
   }
 
@@ -378,8 +453,13 @@ export class Workspace {
     return { state: this.state, trusted: this.trusted, quarantined: this.quarantined, projectedThrough };
   }
 
-  async transact(operations, { profileIds = [], actorId = "human" } = {}) {
+  async transact(operations, { profileIds = [], actorId = "human", episodeId } = {}) {
     if (!operations.length) throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { reason: "empty_transaction" });
+    if (episodeId !== undefined) {
+      for (const operation of operations) {
+        authorizeMutation(this.state, { actorId, operation, targetId: operation.value?.id, episodeId });
+      }
+    }
     if (actorId !== "human" && !String(actorId).startsWith("policy-")) {
       for (const operation of operations) {
         if (operation.value?.approval_state === "accepted") {
