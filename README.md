@@ -22,7 +22,8 @@ Kraddle is in **architecture and adversarial-prototype design**. The repository 
 
 - The evolving theory and checkpoints in `contexts/`.
 - The canonical terminology and format reference in `docs/`.
-- No implemented CLI, KRD encoder, analyzer, or execution runtime yet.
+- A small Phase 0 kernel runtime exists in `src/kernel.js`, with tests in `test/kernel.test.js`.
+- The runtime currently uses readable JSON-lines event segments as a temporary encoding; KRD binary encoding, repository analysis, and the full control runtime remain unimplemented.
 
 Maturity labels used throughout the project:
 

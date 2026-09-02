@@ -51,6 +51,7 @@
           <a class="nav-link" href="#precision">Precision gradient</a>
           <a class="nav-link" href="#compiler">Meaning compiler</a>
           <a class="nav-link" href="#design-work">Remaining design work</a>
+          <a class="nav-link" href="#adversarial">Adversarial checks</a>
 
           <p class="nav-heading">FORMAT SPECIFICATION</p>
           <a class="nav-link" href="#format">Directory layout</a>
@@ -260,7 +261,7 @@ profile_id = root_unit_id</code><button class="copy-button" aria-label="Copy cod
           <pre><code>create_profile → propose → accept → activate
                                       ↓
                               complete / supersede / invalidate / abort</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
-          <div class="note"><span class="note-icon">i</span><div><strong>Phase 0 target</strong><p>ControlBinding, EvaluationProfile, and ExecutionEpisode are the first profiles required to prove the model.</p></div></div>
+          <div class="note"><span class="note-icon">i</span><div><strong>Phase 0 target</strong><p>ControlBinding, EvaluationProfile, and ExecutionEpisode are the first profiles required to prove the model. Their metamodel is specified; implementation is pending.</p></div></div>
         </section>
 
         <section class="doc-section" id="precision" data-title="Precision gradient">
@@ -308,6 +309,31 @@ profile_id = root_unit_id</code><button class="copy-button" aria-label="Copy cod
           </ol>
           <h2 id="completion-template">Completion template</h2>
           <p>Each design is complete only when it defines normative semantics, kernel realization, schema, lifecycle, operations, projections, and conformance tests.</p>
+        </section>
+
+        <section class="doc-section" id="adversarial" data-title="Adversarial checks">
+          <p class="eyebrow">ARCHITECTURE / VERIFICATION</p><h1>Adversarial checks</h1>
+          <p class="lead">These checks are specified now and become executable when the control runtime exists. They attack silent control loss, not ordinary happy-path behavior.</p>
+          <div class="note"><span class="note-icon">i</span><div><strong>Current maturity: specified, not verified</strong><p>No Kraddle runtime exists yet. These are the conformance fixtures the first implementation must pass.</p></div></div>
+          <div class="property-table">
+            <div><code>AD-01</code><span>Narrow context excludes an applicable prohibition → reject or mark incomplete.</span></div>
+            <div><code>AD-02</code><span>Acting agent changes its own architecture rule → deny by authority.</span></div>
+            <div><code>AD-03</code><span>Evaluator fails instead of reporting violation → blocking obligation remains unresolved.</span></div>
+            <div><code>AD-04</code><span>Coverage selector excludes changed files → reject coverage claim.</span></div>
+            <div><code>AD-05</code><span>Evaluation passes at base revision, then code changes → cannot close.</span></div>
+            <div><code>AD-06</code><span>Anchor remap becomes ambiguous → pause affected capability.</span></div>
+            <div><code>AD-07</code><span>Unknown extension carries restrictive control → preserve, but do not authorize.</span></div>
+            <div><code>AD-08</code><span>Offline branch weakens a control binding → block until authorized resolution.</span></div>
+            <div><code>AD-09</code><span>Agent requests exception and continues before authorization → deny effect.</span></div>
+            <div><code>AD-10</code><span>Agent acts first and records episode afterward → classify as uncontrolled.</span></div>
+            <div><code>AD-11</code><span>Required evaluator cannot parse generated code → `evaluation_failed`, never pass.</span></div>
+            <div><code>AD-12</code><span>Profile transaction is interrupted → expose old or new valid state only.</span></div>
+            <div><code>AD-13</code><span>Authority is revoked during execution → deny the next consequential effect.</span></div>
+            <div><code>AD-14</code><span>Exception expires during execution → block or escalate the next effect.</span></div>
+            <div><code>AD-15</code><span>Invalidation propagation is delayed → read-time checks prevent stale authorization.</span></div>
+          </div>
+          <h2 id="adversarial-exit">Exit condition</h2>
+          <p>Kraddle passes the adversarial proof only when no condition is silently omitted, passed, waived, or resolved by the acting agent changing its own governing rules.</p>
         </section>
 
         <section class="doc-section" id="format" data-title="Directory layout">
