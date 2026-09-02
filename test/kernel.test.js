@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -171,6 +171,33 @@ test("an existing workspace opens with load, not init", async () => {
     const result = await reloaded.load();
     assert.equal(result.state.units.has(recordId), true);
     assert.equal(result.trusted, true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("concurrent transactions are serialized", async () => {
+  const { root, store } = await workspace();
+  try {
+    const first = id();
+    const second = id();
+    const [tx1, tx2] = await Promise.all([
+      store.transact([{ type: "unit.create", value: unit(first, "behavior") }]),
+      store.transact([{ type: "unit.create", value: unit(second, "behavior") }]),
+    ]);
+    const eventsDir = join(root, ".kraddle", "events");
+    const segments = (await readdir(eventsDir)).filter((name) => name.endsWith(".krd"));
+    assert.equal(segments.length, 2);
+    const heads = JSON.parse(await readFile(join(root, ".kraddle", "heads.krd"), "utf8"));
+    assert.equal(heads.heads.length, 2);
+    assert.ok(heads.heads.includes(tx1));
+    assert.ok(heads.heads.includes(tx2));
+    assert.equal(store.state.units.has(first), true);
+    assert.equal(store.state.units.has(second), true);
+    const fresh = new Workspace(root);
+    const result = await fresh.load();
+    assert.equal(result.trusted, true);
+    assert.equal(result.projectedThrough, 2);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -657,6 +657,15 @@ export class Workspace {
     this.events = join(this.kraddle, "events");
     this.state = emptyState();
     this.heads = [];
+    this._lock = Promise.resolve();
+  }
+
+  async _chain() {
+    const prior = this._lock;
+    let release;
+    this._lock = new Promise((resolve) => { release = resolve; });
+    await prior;
+    return release;
   }
 
   async init() {
@@ -682,86 +691,99 @@ export class Workspace {
   }
 
   async load() {
-    const files = (await readdir(this.events)).filter((name) => name.endsWith(".krd")).sort();
-    this.state = emptyState();
-    this.heads = [];
-    this.trusted = true;
-    this.quarantined = [];
-    let projectedThrough = 0;
-    let quarantine = null;
-    // Segments are applied in lexical segment order (sorted filename order).
-    // Phase 0 has no causal clocks; lexical segment order is the only ordering available.
-    for (const file of files) {
-      let operations = null;
-      let commit = null;
-      try {
-        const lines = (await readFile(join(this.events, file), "utf8")).trim().split("\n").filter(Boolean);
-        const transaction = lines.map((line) => JSON.parse(line));
-        if (transaction.length && transaction.at(-1).type === "transaction.commit") {
-          commit = transaction.at(-1).value;
-          operations = transaction.slice(0, -1);
+    const release = await this._chain();
+    try {
+      const files = (await readdir(this.events)).filter((name) => name.endsWith(".krd")).sort();
+      this.state = emptyState();
+      this.heads = [];
+      this.trusted = true;
+      this.quarantined = [];
+      let projectedThrough = 0;
+      let quarantine = null;
+      // Segments are applied in lexical segment order (sorted filename order).
+      // Phase 0 has no causal clocks; lexical segment order is the only ordering available.
+      for (const file of files) {
+        let operations = null;
+        let commit = null;
+        try {
+          const lines = (await readFile(join(this.events, file), "utf8")).trim().split("\n").filter(Boolean);
+          const transaction = lines.map((line) => JSON.parse(line));
+          if (transaction.length && transaction.at(-1).type === "transaction.commit") {
+            commit = transaction.at(-1).value;
+            operations = transaction.slice(0, -1);
+          }
+        } catch {
+          commit = null;
         }
-      } catch {
-        commit = null;
+        if (commit === null) {
+          quarantine = { file, code: DENIAL.SEGMENT_COMMIT_MARKER_MISSING, index: projectedThrough };
+        } else if (digest(JSON.stringify(operations)) !== commit.operationsDigest) {
+          quarantine = { file, code: DENIAL.SEGMENT_DIGEST_MISMATCH, index: projectedThrough };
+        }
+        if (quarantine) break;
+        for (const operation of operations) applyOperation(this.state, operation);
+        this.heads.push(commit.transactionId);
+        projectedThrough += 1;
       }
-      if (commit === null) {
-        quarantine = { file, code: DENIAL.SEGMENT_COMMIT_MARKER_MISSING, index: projectedThrough };
-      } else if (digest(JSON.stringify(operations)) !== commit.operationsDigest) {
-        quarantine = { file, code: DENIAL.SEGMENT_DIGEST_MISMATCH, index: projectedThrough };
+      if (quarantine) {
+        this.trusted = false;
+        this.quarantined.push(quarantine);
       }
-      if (quarantine) break;
-      for (const operation of operations) applyOperation(this.state, operation);
-      this.heads.push(commit.transactionId);
-      projectedThrough += 1;
+      await writeFile(
+        join(this.kraddle, "local", "quarantine.json"),
+        JSON.stringify({ trusted: this.trusted, quarantined: this.quarantined, projectedThrough }, null, 2) + "\n",
+        "utf8",
+      );
+      return { state: this.state, trusted: this.trusted, quarantined: this.quarantined, projectedThrough };
+    } finally {
+      release();
     }
-    if (quarantine) {
-      this.trusted = false;
-      this.quarantined.push(quarantine);
-    }
-    await writeFile(
-      join(this.kraddle, "local", "quarantine.json"),
-      JSON.stringify({ trusted: this.trusted, quarantined: this.quarantined, projectedThrough }, null, 2) + "\n",
-      "utf8",
-    );
-    return { state: this.state, trusted: this.trusted, quarantined: this.quarantined, projectedThrough };
   }
 
   async transact(operations, { profileIds = [], actorId = "human", episodeId } = {}) {
-    if (!operations.length) throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { reason: "empty_transaction" });
-    if (episodeId !== undefined) {
-      for (const operation of operations) {
-        authorizeMutation(this.state, { actorId, operation, targetId: operation.value?.id, episodeId });
-      }
-    }
-    if (actorId !== "human" && !String(actorId).startsWith("policy-")) {
-      for (const operation of operations) {
-        if (operation.value?.approval_state === "accepted") {
-          throw new ControlDenial(DENIAL.ACCEPTANCE_NOT_AUTHORIZED, { actorId, recordId: operation.value.id });
+    const release = await this._chain();
+    try {
+      if (!operations.length) throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { reason: "empty_transaction" });
+      if (episodeId !== undefined) {
+        for (const operation of operations) {
+          authorizeMutation(this.state, { actorId, operation, targetId: operation.value?.id, episodeId });
         }
       }
+      if (actorId !== "human" && !String(actorId).startsWith("policy-")) {
+        for (const operation of operations) {
+          if (operation.value?.approval_state === "accepted") {
+            throw new ControlDenial(DENIAL.ACCEPTANCE_NOT_AUTHORIZED, { actorId, recordId: operation.value.id });
+          }
+        }
+      }
+      const next = restoreState(cloneState(this.state));
+      for (const operation of operations) applyOperation(next, operation);
+      for (const profileId of profileIds) validateProfile(next, profileId);
+      const transactionId = randomUUID();
+      const prepared = operations.map((operation) => ({ ...operation, transactionId, actorId }));
+      const commit = {
+        type: "transaction.commit",
+        value: {
+          transactionId,
+          actorId,
+          operationsDigest: digest(JSON.stringify(prepared)),
+          profileIds,
+        },
+      };
+      const file = `${Date.now()}-${transactionId}.krd`;
+      const temporary = join(this.events, `.${file}.tmp`);
+      // rename is atomic but not fsync-durable; a crash after rename may lose
+      // the tail of the event history. Stated durability limitation of Phase 0,
+      // not a guarantee.
+      await writeFile(temporary, prepared.concat(commit).map((item) => JSON.stringify(item)).join("\n") + "\n", "utf8");
+      await rename(temporary, join(this.events, file));
+      this.state = next;
+      this.heads.push(transactionId);
+      await writeFile(join(this.kraddle, "heads.krd"), JSON.stringify({ heads: this.heads }) + "\n", "utf8");
+      return transactionId;
+    } finally {
+      release();
     }
-    const next = restoreState(cloneState(this.state));
-    for (const operation of operations) applyOperation(next, operation);
-    for (const profileId of profileIds) validateProfile(next, profileId);
-    const transactionId = randomUUID();
-    const prepared = operations.map((operation) => ({ ...operation, transactionId, actorId }));
-    const commit = {
-      type: "transaction.commit",
-      value: {
-        transactionId,
-        actorId,
-        operationsDigest: digest(JSON.stringify(prepared)),
-        profileIds,
-      },
-    };
-    const file = `${Date.now()}-${transactionId}.krd`;
-    const temporary = join(this.events, `.${file}.tmp`);
-    await writeFile(temporary, prepared.concat(commit).map((item) => JSON.stringify(item)).join("\n") + "\n", "utf8");
-    await rename(temporary, join(this.events, file));
-    this.state = next;
-    this.heads.push(transactionId);
-    await writeFile(join(this.kraddle, "heads.krd"), JSON.stringify({ heads: this.heads }) + "\n", "utf8");
-    return transactionId;
   }
 }
 
