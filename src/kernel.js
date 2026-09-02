@@ -304,6 +304,72 @@ export function episodeStatus(state, episodeId) {
   return profileState(episode);
 }
 
+const SUPPORTED_SELECTOR_TYPES = new Set(["exact_unit_id", "path_prefix", "scope_membership", "relationship_type"]);
+
+export function resolveApplicableContext(state, {
+  taskScopeId, targetPaths = [], revision, declaredApplicable = [], dependencyEvidenceId,
+} = {}) {
+  const incompleteReasons = [];
+  const addReason = (code) => {
+    if (!incompleteReasons.includes(code)) incompleteReasons.push(code);
+  };
+  const unresolvedSelectors = [];
+  const unresolvedEdges = [];
+  const applicable = new Set();
+
+  for (const unit of state.units.values()) {
+    if (unit.kind !== "control_binding" || unit.approval_state !== "accepted") continue;
+    const selector = profileRole(state, unit.id, "subject_selector", "commitment")?.value;
+    const selectorType = selector?.type;
+    if (typeof selectorType !== "string" || !SUPPORTED_SELECTOR_TYPES.has(selectorType)) {
+      unresolvedSelectors.push({ bindingId: unit.id, selectorType });
+      addReason(DENIAL.UNRESOLVED_SELECTOR);
+      continue;
+    }
+    const value = selector.value;
+    let matches = false;
+    if (selectorType === "exact_unit_id") {
+      matches = state.units.has(value);
+    } else if (selectorType === "path_prefix") {
+      matches = typeof value === "string" && targetPaths.some((path) => typeof path === "string" && path.startsWith(value));
+    } else if (selectorType === "scope_membership") {
+      matches = value === taskScopeId;
+    } else if (selectorType === "relationship_type") {
+      matches = [...state.relationships.values()].some((edge) => edge.role === value);
+    }
+    if (matches) applicable.add(unit.id);
+  }
+
+  // Dependency edges come from state via pinned extractor evidence, never from the caller.
+  const evidence = dependencyEvidenceId !== undefined ? state.evidence.get(dependencyEvidenceId) : undefined;
+  const evidencePinned = evidence !== undefined
+    && evidence.origin === "extractor"
+    && evidence.stateRef?.revision === revision;
+  if (!evidencePinned) {
+    addReason(DENIAL.EVIDENCE_PIN_MISMATCH);
+  } else {
+    for (const edge of evidence.edges ?? []) {
+      if (edge.resolution === "ambiguous" || edge.resolution === "unresolved") {
+        unresolvedEdges.push({ from: edge.from, to: edge.to, resolution: edge.resolution });
+        addReason(DENIAL.UNRESOLVED_DEPENDENCY_EDGE);
+      }
+    }
+  }
+
+  const omitted = [...applicable].filter((bindingId) => !declaredApplicable.includes(bindingId));
+  if (omitted.length) addReason(DENIAL.OMITTED_APPLICABLE_COMMITMENT);
+
+  return {
+    complete: incompleteReasons.length === 0,
+    applicable: [...applicable].sort(),
+    omitted,
+    unresolvedSelectors,
+    unresolvedEdges,
+    incompleteReasons,
+    revision,
+  };
+}
+
 export function admitEffect(state, episodeId, effect, workspace) {
   if (workspace !== undefined) requireTrustedProjection(workspace);
   const episode = profileRoot(state, episodeId);
@@ -317,6 +383,9 @@ export function admitEffect(state, episodeId, effect, workspace) {
   const context = profileRole(state, episodeId, "context_envelope", "unit");
   if (context?.valid === false || context?.completeness === "incomplete") {
     throw new ControlDenial(DENIAL.CONTEXT_INCOMPLETE, { episodeId });
+  }
+  if (context?.complete === false) {
+    throw new ControlDenial(DENIAL.CONTEXT_INCOMPLETE, { episodeId, reasons: context.incompleteReasons ?? [] });
   }
   if (authority?.revoked === true) {
     throw new ControlDenial(DENIAL.AUTHORITY_REVOKED, { episodeId });

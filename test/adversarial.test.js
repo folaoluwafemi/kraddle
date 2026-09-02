@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import * as kernel from "../src/kernel.js";
 
-const { DENIAL, Workspace, admitEffect, computeCoverageDigest, emptyState, episodeStatus, evaluate, id, validateCoverage, validateEpisodeClosure } = kernel;
+const { DENIAL, Workspace, admitEffect, computeCoverageDigest, emptyState, episodeStatus, evaluate, id, resolveApplicableContext, validateCoverage, validateEpisodeClosure } = kernel;
 
 const env = (over = {}) => ({
   origin: "human", epistemic_basis: "asserted",
@@ -19,13 +19,13 @@ const rel = (recordId, profileId, role, targetId, targetType, over = {}) => ({ i
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function episodeState({ authority = {}, episode = {} } = {}) {
+function episodeState({ authority = {}, episode = {}, context = {} } = {}) {
   const state = emptyState();
   state.units.set("EP1", { id: "EP1", kind: "execution_episode", lifecycle: "running", ...env(), ...episode });
   state.commitments.set("purpose-c", commitmentRecord("purpose-c", "do work"));
   state.scopes.set("scope-r", { id: "scope-r", kind: "scope", ...env() });
   state.commitments.set("base-c", commitmentRecord("base-c", "revision-a"));
-  state.units.set("context-u", { id: "context-u", kind: "context_envelope", valid: true, completeness: "complete", ...env() });
+  state.units.set("context-u", { id: "context-u", kind: "context_envelope", valid: true, completeness: "complete", ...env(), ...context });
   state.units.set("authority-u", { id: "authority-u", kind: "authority_grant", ...env(), ...authority });
   state.units.set("delta-u", { id: "delta-u", kind: "software_element", ...env() });
   const edges = [
@@ -463,4 +463,93 @@ test("AD-11: an evaluator parse failure is never a pass", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+const addBinding = (state, bindingId, selector) => {
+  state.units.set(bindingId, { id: bindingId, kind: "control_binding", ...env() });
+  state.commitments.set(`${bindingId}-gov`, commitmentRecord(`${bindingId}-gov`, "domain must not import ui"));
+  state.commitments.set(`${bindingId}-sel`, commitmentRecord(`${bindingId}-sel`, selector));
+  state.commitments.set(`${bindingId}-mod`, commitmentRecord(`${bindingId}-mod`, "prohibition", "has_modality"));
+  state.units.set(`${bindingId}-ev`, unitRecord(`${bindingId}-ev`, "evaluator"));
+  state.relationships.set(`${bindingId}-r1`, rel(`${bindingId}-r1`, bindingId, "governed_commitment", `${bindingId}-gov`, "commitment"));
+  state.relationships.set(`${bindingId}-r2`, rel(`${bindingId}-r2`, bindingId, "subject_selector", `${bindingId}-sel`, "commitment"));
+  state.relationships.set(`${bindingId}-r3`, rel(`${bindingId}-r3`, bindingId, "modality", `${bindingId}-mod`, "commitment"));
+  state.relationships.set(`${bindingId}-r4`, rel(`${bindingId}-r4`, bindingId, "evaluator", `${bindingId}-ev`, "unit"));
+};
+
+const evidenceRecord = (recordId, over = {}) => ({
+  ...env(),
+  id: recordId,
+  kind: "evidence",
+  origin: "extractor",
+  stateRef: { repository: "repo", revision: "rev-b", contentDigest: "digest-b" },
+  edges: [{ from: "src/domain/a.ts", to: "src/ui/Button.tsx", resolution: "resolved" }],
+  ...over,
+});
+
+test("AD-01: a narrow context cannot omit an applicable prohibition", () => {
+  const state = emptyState();
+  addBinding(state, "CB1", { type: "path_prefix", value: "src/domain/" });
+  state.evidence.set("EV-OK", evidenceRecord("EV-OK"));
+
+  const narrow = resolveApplicableContext(state, {
+    targetPaths: ["src/domain/service.ts"],
+    declaredApplicable: [],
+  });
+  assert.equal(narrow.complete, false);
+  assert.ok(narrow.applicable.includes("CB1"));
+  assert.ok(narrow.omitted.includes("CB1"));
+  assert.ok(narrow.incompleteReasons.includes(DENIAL.OMITTED_APPLICABLE_COMMITMENT));
+
+  const denied = episodeState({
+    authority: { operations: ["write"] },
+    context: { complete: narrow.complete, incompleteReasons: narrow.incompleteReasons },
+  });
+  assert.throws(
+    () => admitEffect(denied, "EP1", { operation: "write", target: "src/domain/service.ts" }),
+    (e) => e.code === DENIAL.CONTEXT_INCOMPLETE,
+  );
+
+  const unsupported = emptyState();
+  addBinding(unsupported, "CB2", { type: "semantic_similarity", value: "auth-ish" });
+  const unresolved = resolveApplicableContext(unsupported, {
+    targetPaths: ["src/domain/service.ts"],
+    declaredApplicable: [],
+  });
+  assert.equal(unresolved.complete, false);
+  assert.ok(unresolved.incompleteReasons.includes(DENIAL.UNRESOLVED_SELECTOR));
+
+  const edgeState = emptyState();
+  edgeState.evidence.set("EV-EDGES", evidenceRecord("EV-EDGES", {
+    edges: [{ from: "src/domain/a.ts", to: null, resolution: "unresolved" }],
+  }));
+  const unresolvedEdge = resolveApplicableContext(edgeState, { revision: "rev-b", dependencyEvidenceId: "EV-EDGES" });
+  assert.equal(unresolvedEdge.complete, false);
+  assert.ok(unresolvedEdge.incompleteReasons.includes(DENIAL.UNRESOLVED_DEPENDENCY_EDGE));
+
+  const missing = resolveApplicableContext(state, {});
+  assert.equal(missing.complete, false);
+  assert.ok(missing.incompleteReasons.includes(DENIAL.EVIDENCE_PIN_MISMATCH));
+
+  state.evidence.set("EV-AGENT", evidenceRecord("EV-AGENT", { origin: "agent" }));
+  const agentSupplied = resolveApplicableContext(state, { revision: "rev-b", dependencyEvidenceId: "EV-AGENT" });
+  assert.equal(agentSupplied.complete, false);
+  assert.ok(agentSupplied.incompleteReasons.includes(DENIAL.EVIDENCE_PIN_MISMATCH));
+
+  state.evidence.set("EV-OLD", evidenceRecord("EV-OLD", {
+    stateRef: { repository: "repo", revision: "rev-a", contentDigest: "digest-a" },
+  }));
+  const wrongRevision = resolveApplicableContext(state, { revision: "rev-b", dependencyEvidenceId: "EV-OLD" });
+  assert.equal(wrongRevision.complete, false);
+  assert.ok(wrongRevision.incompleteReasons.includes(DENIAL.EVIDENCE_PIN_MISMATCH));
+
+  const positive = resolveApplicableContext(state, {
+    targetPaths: ["src/domain/service.ts"],
+    declaredApplicable: ["CB1"],
+    revision: "rev-b",
+    dependencyEvidenceId: "EV-OK",
+  });
+  assert.equal(positive.complete, true);
+  assert.deepEqual(positive.omitted, []);
+  assert.deepEqual(positive.applicable, ["CB1"]);
 });
