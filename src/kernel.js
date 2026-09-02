@@ -438,6 +438,9 @@ export function classifyEffect(state, episodeId, observedEffect) {
   if (!admission) {
     return { controlled: false, code: DENIAL.UNCONTROLLED_EFFECT, reason: "admission_not_in_ledger" };
   }
+  if (observedEffect.operation !== admission.operation || observedEffect.target !== admission.target) {
+    return { controlled: false, code: DENIAL.UNCONTROLLED_EFFECT, reason: "effect_mismatch" };
+  }
   if (
     typeof observedEffect.observedAt === "number" &&
     typeof admission.admittedAt === "number" &&

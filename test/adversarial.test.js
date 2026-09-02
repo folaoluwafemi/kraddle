@@ -577,6 +577,35 @@ test("AD-10: effects cannot be documented after bypassing admission", () => {
   assert.deepEqual(validateEpisodeClosure(controlled, "EP1"), { closable: true, episodeId: "EP1" });
 });
 
+test("an observed effect must match its admission", () => {
+  const state = closureState({});
+  const admission = admitEffect(state, "EP1", { operation: "write", target: "src/domain/a.ts" });
+  const observation = recordObservedEffect(state, "EP1", {
+    operation: "delete",
+    target: "src/other/secrets.txt",
+    admissionId: admission.admissionId,
+  });
+  const classification = classifyEffect(state, "EP1", observation);
+  assert.equal(classification.controlled, false);
+  assert.equal(classification.reason, "effect_mismatch");
+  assert.throws(
+    () => validateEpisodeClosure(state, "EP1"),
+    (e) => e.code === DENIAL.UNCONTROLLED_EFFECT,
+  );
+});
+
+test("a matching observed effect is controlled", () => {
+  const state = closureState({});
+  const admission = admitEffect(state, "EP1", { operation: "write", target: "src/domain/a.ts" });
+  const observation = recordObservedEffect(state, "EP1", {
+    operation: "write",
+    target: "src/domain/a.ts",
+    admissionId: admission.admissionId,
+  });
+  assert.deepEqual(classifyEffect(state, "EP1", observation), { controlled: true });
+  assert.deepEqual(validateEpisodeClosure(state, "EP1"), { closable: true, episodeId: "EP1" });
+});
+
 test.todo("AD-06: ambiguous anchor pauses affected execution — blocked on code anchor subsystem");
 test.todo("AD-07: unknown control extension cannot authorize — blocked on schema capability negotiation (P9)");
 test.todo("AD-08: concurrent governing heads block execution — blocked on causal clocks and heads (P3)");
