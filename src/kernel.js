@@ -121,9 +121,38 @@ export function emptyState() {
   };
 }
 
+export const ENVELOPE_ENUMS = Object.freeze({
+  origin:          ["human", "extractor", "agent", "policy", "import"],
+  epistemic_basis: ["observed", "derived", "interpreted", "asserted"],
+  approval_state:  ["proposed", "accepted", "rejected", "superseded"],
+  freshness_state: ["current", "stale", "expired"],
+});
+
+const ENVELOPE_REQUIRED = ["id", "kind", "origin", "epistemic_basis", "approval_state", "freshness_state", "recorded_at"];
+
+export function validateEnvelope(record) {
+  const missing = ENVELOPE_REQUIRED.filter((field) => record?.[field] === undefined || record?.[field] === null);
+  if (missing.length) {
+    throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { id: record?.id, missing });
+  }
+  for (const [field, allowed] of Object.entries(ENVELOPE_ENUMS)) {
+    if (!allowed.includes(record[field])) {
+      throw new ControlDenial(DENIAL.ENVELOPE_ENUM_INVALID, { id: record.id, field, value: record[field] });
+    }
+  }
+  if (
+    record.confidence !== undefined &&
+    (typeof record.confidence !== "number" || record.confidence < 0 || record.confidence > 1)
+  ) {
+    throw new ControlDenial(DENIAL.ENVELOPE_ENUM_INVALID, { id: record.id, field: "confidence", value: record.confidence });
+  }
+  return record;
+}
+
 export function applyOperation(state, operation) {
   const { type, value } = operation;
   if (!value?.id) throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { type, missing: ["id"] });
+  if (type !== "unit.tombstone") validateEnvelope(value);
 
   if (type === "unit.create" || type === "unit.update") state.units.set(value.id, value);
   else if (type === "commitment.create" || type === "commitment.update") state.commitments.set(value.id, value);
@@ -319,6 +348,13 @@ export class Workspace {
 
   async transact(operations, { profileIds = [], actorId = "human" } = {}) {
     if (!operations.length) throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { reason: "empty_transaction" });
+    if (actorId !== "human" && !String(actorId).startsWith("policy-")) {
+      for (const operation of operations) {
+        if (operation.value?.approval_state === "accepted") {
+          throw new ControlDenial(DENIAL.ACCEPTANCE_NOT_AUTHORIZED, { actorId, recordId: operation.value.id });
+        }
+      }
+    }
     const next = restoreState(cloneState(this.state));
     for (const operation of operations) applyOperation(next, operation);
     for (const profileId of profileIds) validateProfile(next, profileId);

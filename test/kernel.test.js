@@ -5,9 +5,15 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { DENIAL, Workspace, admitEffect, id, validateEpisodeClosure, validateProfile } from "../src/kernel.js";
 
-const unit = (id, kind, title = kind) => ({ id, kind, title });
-const commitment = (id, value, type = "statement") => ({ id, type, value });
-const edge = (id, profileId, role, targetId, targetType) => ({ id, profileId, role, targetId, targetType });
+const env = (over = {}) => ({
+  origin: "human", epistemic_basis: "asserted",
+  approval_state: "accepted", freshness_state: "current",
+  recorded_at: 1756771200000, ...over,
+});
+
+const unit = (id, kind, title = kind) => ({ id, kind, title, ...env() });
+const commitment = (id, value, type = "statement") => ({ id, kind: "commitment", type, value, ...env() });
+const edge = (id, profileId, role, targetId, targetType) => ({ id, kind: "relationship", profileId, role, targetId, targetType, ...env() });
 
 async function workspace() {
   const root = await mkdtemp(join(tmpdir(), "kraddle-"));
