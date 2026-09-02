@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import * as kernel from "../src/kernel.js";
 
-const { DENIAL, Workspace, admitEffect, computeCoverageDigest, emptyState, episodeStatus, evaluate, id, resolveApplicableContext, validateCoverage, validateEpisodeClosure } = kernel;
+const { DENIAL, Workspace, admitEffect, classifyEffect, computeCoverageDigest, emptyState, episodeStatus, evaluate, id, recordObservedEffect, resolveApplicableContext, validateCoverage, validateEpisodeClosure } = kernel;
 
 const env = (over = {}) => ({
   origin: "human", epistemic_basis: "asserted",
@@ -552,4 +552,41 @@ test("AD-01: a narrow context cannot omit an applicable prohibition", () => {
   assert.equal(positive.complete, true);
   assert.deepEqual(positive.omitted, []);
   assert.deepEqual(positive.applicable, ["CB1"]);
+});
+
+test("AD-10: effects cannot be documented after bypassing admission", () => {
+  const unadmitted = closureState({});
+  const observation = recordObservedEffect(unadmitted, "EP1", {
+    operation: "write",
+    target: "src/domain/a.ts",
+    admissionId: null,
+  });
+  assert.equal(classifyEffect(unadmitted, "EP1", observation).controlled, false);
+  assert.throws(
+    () => validateEpisodeClosure(unadmitted, "EP1"),
+    (e) => e.code === DENIAL.UNCONTROLLED_EFFECT,
+  );
+  assert.equal(unadmitted.units.get("EP1").observedEffects.length, 1);
+
+  const forged = closureState({});
+  const forgedObservation = recordObservedEffect(forged, "EP1", {
+    operation: "write",
+    target: "src/domain/a.ts",
+    admissionId: "not-a-real-admission",
+  });
+  assert.equal(classifyEffect(forged, "EP1", forgedObservation).controlled, false);
+  assert.throws(
+    () => validateEpisodeClosure(forged, "EP1"),
+    (e) => e.code === DENIAL.UNCONTROLLED_EFFECT,
+  );
+
+  const controlled = closureState({});
+  const admission = admitEffect(controlled, "EP1", { operation: "write", target: "src/domain/a.ts" });
+  assert.equal(admission.admitted, true);
+  recordObservedEffect(controlled, "EP1", {
+    operation: "write",
+    target: "src/domain/a.ts",
+    admissionId: admission.admissionId,
+  });
+  assert.deepEqual(validateEpisodeClosure(controlled, "EP1"), { closable: true, episodeId: "EP1" });
 });

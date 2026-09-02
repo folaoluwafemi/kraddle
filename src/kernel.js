@@ -408,7 +408,44 @@ export function admitEffect(state, episodeId, effect, workspace) {
   if (effect.target && authority?.targetPrefix && !effect.target.startsWith(authority.targetPrefix)) {
     throw new ControlDenial(DENIAL.TARGET_OUTSIDE_AUTHORITY, { episodeId, target: effect.target, targetPrefix: authority.targetPrefix });
   }
-  return { admitted: true, episodeId, effect };
+  const admittedAt = Date.now();
+  const admissionId = digest(`${episodeId}${effect.operation}${effect.target ?? ""}${admittedAt}`);
+  if (!Array.isArray(episode.admittedEffects)) episode.admittedEffects = [];
+  episode.admittedEffects.push({ admissionId, admittedAt, operation: effect.operation, target: effect.target });
+  return { admitted: true, episodeId, effect, admissionId, admittedAt };
+}
+
+export function recordObservedEffect(state, episodeId, observedEffect) {
+  const episode = profileRoot(state, episodeId);
+  if (!observedEffect || typeof observedEffect !== "object" || !("admissionId" in observedEffect)) {
+    throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { episodeId, reason: "observed_effect_requires_admission_id" });
+  }
+  if (!Array.isArray(episode.observedEffects)) episode.observedEffects = [];
+  const record = typeof observedEffect.observedAt === "number"
+    ? { ...observedEffect }
+    : { observedAt: Date.now(), ...observedEffect };
+  episode.observedEffects.push(record);
+  return record;
+}
+
+export function classifyEffect(state, episodeId, observedEffect) {
+  const episode = profileRoot(state, episodeId);
+  if (observedEffect?.admissionId == null) {
+    return { controlled: false, code: DENIAL.UNCONTROLLED_EFFECT, reason: "observed_without_admission" };
+  }
+  const ledger = Array.isArray(episode.admittedEffects) ? episode.admittedEffects : [];
+  const admission = ledger.find((entry) => entry && entry.admissionId === observedEffect.admissionId);
+  if (!admission) {
+    return { controlled: false, code: DENIAL.UNCONTROLLED_EFFECT, reason: "admission_not_in_ledger" };
+  }
+  if (
+    typeof observedEffect.observedAt === "number" &&
+    typeof admission.admittedAt === "number" &&
+    admission.admittedAt > observedEffect.observedAt
+  ) {
+    return { controlled: false, code: DENIAL.UNCONTROLLED_EFFECT, reason: "admitted_after_observation" };
+  }
+  return { controlled: true };
 }
 
 export function validateStateReference(ref) {
@@ -545,6 +582,12 @@ export function validateEpisodeClosure(state, episodeId, workspace) {
     (Array.isArray(episode.observedEffects) && episode.observedEffects.length > 0);
   if (hasEffects && !episode.resultingStateRef) {
     throw new ControlDenial(DENIAL.EVALUATION_REVISION_MISMATCH, { episodeId, reason: "resulting_state_missing" });
+  }
+  for (const observed of episode.observedEffects ?? []) {
+    const classification = classifyEffect(state, episodeId, observed);
+    if (classification.controlled === false) {
+      throw new ControlDenial(DENIAL.UNCONTROLLED_EFFECT, { episodeId, effect: observed, reason: classification.reason });
+    }
   }
 
   const obligations = relationshipsForRole(state, episodeId, "proof_obligation");
