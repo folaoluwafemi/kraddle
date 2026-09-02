@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { join } from "node:path";
 
@@ -65,6 +65,7 @@ export const DENIAL = Object.freeze({
   SEGMENT_COMMIT_MARKER_MISSING:    "SEGMENT_COMMIT_MARKER_MISSING",
   PROJECTION_UNTRUSTED:             "PROJECTION_UNTRUSTED",
   EVIDENCE_PIN_MISMATCH:            "EVIDENCE_PIN_MISMATCH",
+  WORKSPACE_EXISTS:                 "WORKSPACE_EXISTS",
 });
 
 function profileRoot(state, profileId) {
@@ -659,6 +660,17 @@ export class Workspace {
   }
 
   async init() {
+    const manifestPath = join(this.kraddle, "manifest.krd");
+    let exists = false;
+    try {
+      await access(manifestPath);
+      exists = true;
+    } catch {
+      exists = false;
+    }
+    if (exists) {
+      throw new ControlDenial(DENIAL.WORKSPACE_EXISTS, { root: this.root });
+    }
     await mkdir(this.events, { recursive: true });
     await mkdir(join(this.kraddle, "objects"), { recursive: true });
     await mkdir(join(this.kraddle, "indexes"), { recursive: true });

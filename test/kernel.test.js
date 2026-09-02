@@ -148,3 +148,30 @@ test("does not close an episode without an outcome", () => {
   };
   assert.throws(() => validateEpisodeClosure(state, "episode"), (e) => e.code === DENIAL.EPISODE_OUTCOME_MISSING);
 });
+
+test("init refuses to overwrite an existing workspace", async () => {
+  const root = await mkdtemp(join(tmpdir(), "kraddle-"));
+  const store = new Workspace(root);
+  try {
+    const first = await store.init();
+    await assert.rejects(() => store.init(), (e) => e.code === DENIAL.WORKSPACE_EXISTS);
+    const onDisk = JSON.parse(await readFile(join(root, ".kraddle", "manifest.krd"), "utf8"));
+    assert.equal(onDisk.workspaceId, first.workspaceId);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("an existing workspace opens with load, not init", async () => {
+  const { root, store } = await workspace();
+  try {
+    const recordId = id();
+    await store.transact([{ type: "unit.create", value: unit(recordId, "behavior") }]);
+    const reloaded = new Workspace(root);
+    const result = await reloaded.load();
+    assert.equal(result.state.units.has(recordId), true);
+    assert.equal(result.trusted, true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
