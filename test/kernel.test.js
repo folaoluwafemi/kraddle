@@ -63,13 +63,15 @@ test("rejects a blocking control without an evaluator", async () => {
   }
 });
 
-test("does not expose an incomplete transaction after a temporary-file interruption", async () => {
+test("reloads a committed transaction", async () => {
   const { root, store } = await workspace();
   try {
     await store.transact([{ type: "unit.create", value: unit(id(), "behavior") }]);
     const reloaded = new Workspace(root);
-    await reloaded.load();
-    assert.equal(reloaded.state.units.size, 1);
+    const result = await reloaded.load();
+    assert.equal(result.state.units.size, 1);
+    assert.equal(result.trusted, true);
+    assert.equal(result.projectedThrough, 1);
     const files = await readFile(join(root, ".kraddle", "heads.krd"), "utf8");
     assert.match(files, /heads/);
   } finally {

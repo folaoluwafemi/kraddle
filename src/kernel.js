@@ -226,7 +226,14 @@ function profileState(root) {
   return root.lifecycle ?? "draft";
 }
 
-export function admitEffect(state, episodeId, effect) {
+export function requireTrustedProjection(workspace) {
+  if (workspace?.trusted === false) {
+    throw new ControlDenial(DENIAL.PROJECTION_UNTRUSTED, { quarantined: workspace.quarantined ?? [] });
+  }
+}
+
+export function admitEffect(state, episodeId, effect, workspace) {
+  if (workspace !== undefined) requireTrustedProjection(workspace);
   const episode = profileRoot(state, episodeId);
   if (episode.kind !== "execution_episode") throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { episodeId, kind: episode.kind, reason: "not_execution_episode" });
   validateProfile(state, episodeId);
@@ -260,7 +267,8 @@ export function admitEffect(state, episodeId, effect) {
   return { admitted: true, episodeId, effect };
 }
 
-export function validateEpisodeClosure(state, episodeId) {
+export function validateEpisodeClosure(state, episodeId, workspace) {
+  if (workspace !== undefined) requireTrustedProjection(workspace);
   const episode = profileRoot(state, episodeId);
   if (episode.kind !== "execution_episode") throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { episodeId, kind: episode.kind, reason: "not_execution_episode" });
   validateProfile(state, episodeId);
@@ -329,21 +337,45 @@ export class Workspace {
     const files = (await readdir(this.events)).filter((name) => name.endsWith(".krd")).sort();
     this.state = emptyState();
     this.heads = [];
+    this.trusted = true;
+    this.quarantined = [];
+    let projectedThrough = 0;
+    let quarantine = null;
+    // Segments are applied in lexical segment order (sorted filename order).
+    // Phase 0 has no causal clocks; lexical segment order is the only ordering available.
     for (const file of files) {
-      const lines = (await readFile(join(this.events, file), "utf8")).trim().split("\n").filter(Boolean);
-      const transaction = lines.map((line) => JSON.parse(line));
-      if (!transaction.length || transaction.at(-1).type !== "transaction.commit") {
-        throw new ControlDenial(DENIAL.SEGMENT_COMMIT_MARKER_MISSING, { file });
+      let operations = null;
+      let commit = null;
+      try {
+        const lines = (await readFile(join(this.events, file), "utf8")).trim().split("\n").filter(Boolean);
+        const transaction = lines.map((line) => JSON.parse(line));
+        if (transaction.length && transaction.at(-1).type === "transaction.commit") {
+          commit = transaction.at(-1).value;
+          operations = transaction.slice(0, -1);
+        }
+      } catch {
+        commit = null;
       }
-      const commit = transaction.at(-1).value;
-      const operations = transaction.slice(0, -1);
-      if (digest(JSON.stringify(operations)) !== commit.operationsDigest) {
-        throw new ControlDenial(DENIAL.SEGMENT_DIGEST_MISMATCH, { file });
+      if (commit === null) {
+        quarantine = { file, code: DENIAL.SEGMENT_COMMIT_MARKER_MISSING, index: projectedThrough };
+      } else if (digest(JSON.stringify(operations)) !== commit.operationsDigest) {
+        quarantine = { file, code: DENIAL.SEGMENT_DIGEST_MISMATCH, index: projectedThrough };
       }
+      if (quarantine) break;
       for (const operation of operations) applyOperation(this.state, operation);
       this.heads.push(commit.transactionId);
+      projectedThrough += 1;
     }
-    return this.state;
+    if (quarantine) {
+      this.trusted = false;
+      this.quarantined.push(quarantine);
+    }
+    await writeFile(
+      join(this.kraddle, "local", "quarantine.json"),
+      JSON.stringify({ trusted: this.trusted, quarantined: this.quarantined, projectedThrough }, null, 2) + "\n",
+      "utf8",
+    );
+    return { state: this.state, trusted: this.trusted, quarantined: this.quarantined, projectedThrough };
   }
 
   async transact(operations, { profileIds = [], actorId = "human" } = {}) {
