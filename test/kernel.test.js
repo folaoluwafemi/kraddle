@@ -54,10 +54,50 @@ test("rejects a blocking control without an evaluator", async () => {
   const { root, store } = await workspace();
   try {
     const profile = id();
+    const governed = id();
+    const selector = id();
+    const modality = id();
     await assert.rejects(() => store.transact([
       { type: "unit.create", value: unit(profile, "control_binding") },
-      { type: "commitment.create", value: commitment(id(), "commitment") },
-    ], { profileIds: [profile] }), (e) => e.code === DENIAL.ENVELOPE_INVALID);
+      { type: "commitment.create", value: commitment(governed, "domain must not import ui") },
+      { type: "commitment.create", value: commitment(selector, "src/domain/**") },
+      { type: "commitment.create", value: commitment(modality, "prohibition", "has_modality") },
+      { type: "relationship.add", value: edge(id(), profile, "governed_commitment", governed, "commitment") },
+      { type: "relationship.add", value: edge(id(), profile, "subject_selector", selector, "commitment") },
+      { type: "relationship.add", value: edge(id(), profile, "modality", modality, "commitment") },
+    ], { profileIds: [profile] }), (e) => {
+      assert.equal(e.code, DENIAL.ENVELOPE_INVALID);
+      assert.equal(e.detail.reason, "blocking_modality_requires_evaluator");
+      return true;
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("accepts a blocking control with an evaluator", async () => {
+  const { root, store } = await workspace();
+  try {
+    const profile = id();
+    const governed = id();
+    const selector = id();
+    const modality = id();
+    const evaluator = id();
+    const transactionId = await store.transact([
+      { type: "unit.create", value: unit(profile, "control_binding") },
+      { type: "commitment.create", value: commitment(governed, "domain must not import ui") },
+      { type: "commitment.create", value: commitment(selector, "src/domain/**") },
+      { type: "commitment.create", value: commitment(modality, "prohibition", "has_modality") },
+      { type: "unit.create", value: unit(evaluator, "evaluator") },
+      { type: "relationship.add", value: edge(id(), profile, "governed_commitment", governed, "commitment") },
+      { type: "relationship.add", value: edge(id(), profile, "subject_selector", selector, "commitment") },
+      { type: "relationship.add", value: edge(id(), profile, "modality", modality, "commitment") },
+      { type: "relationship.add", value: edge(id(), profile, "evaluator", evaluator, "unit") },
+    ], { profileIds: [profile] });
+    assert.ok(transactionId);
+    const summary = validateProfile(store.state, profile);
+    assert.equal(summary.kind, "control_binding");
+    assert.ok(summary.roles.includes("evaluator"));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
