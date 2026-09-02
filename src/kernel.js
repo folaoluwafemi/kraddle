@@ -342,6 +342,15 @@ export function admitEffect(state, episodeId, effect, workspace) {
   return { admitted: true, episodeId, effect };
 }
 
+export function validateStateReference(ref) {
+  for (const field of ["repository", "revision", "contentDigest"]) {
+    if (typeof ref?.[field] !== "string" || ref[field].length === 0) {
+      throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { field });
+    }
+  }
+  return ref;
+}
+
 export function validateEpisodeClosure(state, episodeId, workspace) {
   if (workspace !== undefined) requireTrustedProjection(workspace);
   const episode = profileRoot(state, episodeId);
@@ -350,6 +359,14 @@ export function validateEpisodeClosure(state, episodeId, workspace) {
   if (!profileRole(state, episodeId, "outcome", "commitment")) {
     throw new ControlDenial(DENIAL.EPISODE_OUTCOME_MISSING, { episodeId });
   }
+  if (episode.baseStateRef !== undefined) validateStateReference(episode.baseStateRef);
+  if (episode.resultingStateRef !== undefined) validateStateReference(episode.resultingStateRef);
+  const hasEffects =
+    (Array.isArray(episode.admittedEffects) && episode.admittedEffects.length > 0) ||
+    (Array.isArray(episode.observedEffects) && episode.observedEffects.length > 0);
+  if (hasEffects && !episode.resultingStateRef) {
+    throw new ControlDenial(DENIAL.EVALUATION_REVISION_MISMATCH, { episodeId, reason: "resulting_state_missing" });
+  }
 
   const obligations = relationshipsForRole(state, episodeId, "proof_obligation");
   for (const obligation of obligations) {
@@ -357,8 +374,25 @@ export function validateEpisodeClosure(state, episodeId, workspace) {
     const evaluation = state.units.get(obligation.targetId);
     if (!evaluation || evaluation.kind !== "evaluation") throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { episodeId, obligationId: obligation.id, reason: "invalid_evaluation_obligation" });
     validateProfile(state, evaluation.id);
+    if (evaluation.stateRef !== undefined) validateStateReference(evaluation.stateRef);
     const result = profileRole(state, evaluation.id, "result", "commitment");
     const coverage = profileRole(state, evaluation.id, "coverage", "commitment");
+    if (episode.resultingStateRef) {
+      const ref = evaluation.stateRef;
+      const fields = [];
+      if (ref?.repository !== episode.resultingStateRef.repository) fields.push("repository");
+      if (ref?.revision !== episode.resultingStateRef.revision) fields.push("revision");
+      if (ref?.contentDigest !== episode.resultingStateRef.contentDigest) fields.push("contentDigest");
+      if (fields.length) {
+        throw new ControlDenial(DENIAL.EVALUATION_REVISION_MISMATCH, {
+          episodeId,
+          evaluationId: evaluation.id,
+          fields,
+          evaluated: ref?.revision,
+          required: episode.resultingStateRef.revision,
+        });
+      }
+    }
     if (!result || result.value !== "satisfied") throw new ControlDenial(DENIAL.EVALUATION_NOT_SATISFIED, { episodeId, evaluationId: evaluation.id });
     if (!coverage || coverage.value !== "complete") throw new ControlDenial(DENIAL.COVERAGE_INCOMPLETE, { episodeId, evaluationId: evaluation.id });
     if (evaluation.freshness === "stale" || evaluation.evaluationFailed) {

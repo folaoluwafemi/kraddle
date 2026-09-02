@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import * as kernel from "../src/kernel.js";
 
-const { DENIAL, Workspace, admitEffect, emptyState, episodeStatus, id } = kernel;
+const { DENIAL, Workspace, admitEffect, emptyState, episodeStatus, id, validateEpisodeClosure } = kernel;
 
 const env = (over = {}) => ({
   origin: "human", epistemic_basis: "asserted",
@@ -236,4 +236,77 @@ test("AD-13: revoked authority suspends the next effect", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+function closureState({ episode = {}, evaluation = {} } = {}) {
+  const state = emptyState();
+  state.units.set("EP1", {
+    id: "EP1", kind: "execution_episode", lifecycle: "running",
+    baseStateRef: { repository: "repo", revision: "rev-a", contentDigest: "digest-a" },
+    resultingStateRef: { repository: "repo", revision: "rev-b", contentDigest: "digest-b" },
+    ...env(), ...episode,
+  });
+  state.units.set("EV1", {
+    id: "EV1", kind: "evaluation",
+    stateRef: { repository: "repo", revision: "rev-b", contentDigest: "digest-b" },
+    ...env(), ...evaluation,
+  });
+  state.commitments.set("purpose-c", commitmentRecord("purpose-c", "do work"));
+  state.scopes.set("scope-r", { id: "scope-r", kind: "scope", ...env() });
+  state.commitments.set("base-c", commitmentRecord("base-c", "revision-a"));
+  state.units.set("context-u", { id: "context-u", kind: "context_envelope", valid: true, completeness: "complete", ...env() });
+  state.units.set("authority-u", { id: "authority-u", kind: "authority_grant", operations: ["write"], ...env() });
+  state.units.set("delta-u", { id: "delta-u", kind: "software_element", ...env() });
+  state.commitments.set("outcome-c", commitmentRecord("outcome-c", "work complete"));
+  state.commitments.set("target-c", commitmentRecord("target-c", "domain must not import ui"));
+  state.units.set("selector-u", unitRecord("selector-u", "selector"));
+  state.units.set("evaluator-u", unitRecord("evaluator-u", "evaluator"));
+  state.commitments.set("result-c", commitmentRecord("result-c", "satisfied"));
+  state.commitments.set("coverage-c", commitmentRecord("coverage-c", "complete"));
+  const edges = [
+    ["ep-purpose", "EP1", "purpose", "purpose-c", "commitment"],
+    ["ep-scope", "EP1", "target_scope", "scope-r", "scope"],
+    ["ep-base", "EP1", "base_revision", "base-c", "commitment"],
+    ["ep-context", "EP1", "context_envelope", "context-u", "unit"],
+    ["ep-authority", "EP1", "authority_grant", "authority-u", "unit"],
+    ["ep-delta", "EP1", "intended_delta", "delta-u", "unit"],
+    ["ep-outcome", "EP1", "outcome", "outcome-c", "commitment"],
+    ["ep-proof", "EP1", "proof_obligation", "EV1", "unit"],
+    ["ev-target", "EV1", "target_commitment", "target-c", "commitment"],
+    ["ev-selector", "EV1", "target_selector", "selector-u", "unit"],
+    ["ev-scope", "EV1", "source_scope", "scope-r", "scope"],
+    ["ev-evaluator", "EV1", "evaluator", "evaluator-u", "unit"],
+    ["ev-result", "EV1", "result", "result-c", "commitment"],
+    ["ev-coverage", "EV1", "coverage", "coverage-c", "commitment"],
+  ];
+  for (const [recordId, profileId, role, targetId, targetType] of edges) {
+    state.relationships.set(recordId, rel(recordId, profileId, role, targetId, targetType));
+  }
+  return state;
+}
+
+test("AD-05: a base-revision evaluation cannot close a later revision", () => {
+  const mismatched = closureState({
+    evaluation: { stateRef: { repository: "repo", revision: "rev-a", contentDigest: "digest-a" } },
+  });
+  assert.throws(() => validateEpisodeClosure(mismatched, "EP1"), (e) => {
+    assert.equal(e.code, DENIAL.EVALUATION_REVISION_MISMATCH);
+    assert.equal(e.detail.evaluated, "rev-a");
+    assert.equal(e.detail.required, "rev-b");
+    return true;
+  });
+
+  const digestMismatch = closureState({
+    evaluation: { stateRef: { repository: "repo", revision: "rev-b", contentDigest: "digest-x" } },
+  });
+  assert.throws(() => validateEpisodeClosure(digestMismatch, "EP1"), (e) => {
+    assert.equal(e.code, DENIAL.EVALUATION_REVISION_MISMATCH);
+    assert.deepEqual(e.detail.fields, ["contentDigest"]);
+    return true;
+  });
+
+  const matched = closureState({
+    evaluation: { stateRef: { repository: "repo", revision: "rev-b", contentDigest: "digest-b" } },
+  });
+  assert.deepEqual(validateEpisodeClosure(matched, "EP1"), { closable: true, episodeId: "EP1" });
 });
