@@ -540,6 +540,22 @@ test("AD-01: a narrow context cannot omit an applicable prohibition", () => {
   assert.deepEqual(positive.applicable, ["CB1"]);
 });
 
+test("an evidence record without a stateRef cannot vacuously pin a context", () => {
+  const state = emptyState();
+  state.evidence.set("EV-NOREF", evidenceRecord("EV-NOREF", { stateRef: undefined }));
+  const result = resolveApplicableContext(state, { dependencyEvidenceId: "EV-NOREF" });
+  assert.equal(result.complete, false);
+  assert.ok(result.incompleteReasons.includes(DENIAL.EVIDENCE_PIN_MISMATCH));
+});
+
+test("a fully pinned evidence record cannot pin a context when revision is omitted", () => {
+  const state = emptyState();
+  state.evidence.set("EV-FULL", evidenceRecord("EV-FULL"));
+  const result = resolveApplicableContext(state, { dependencyEvidenceId: "EV-FULL" });
+  assert.equal(result.complete, false);
+  assert.ok(result.incompleteReasons.includes(DENIAL.EVIDENCE_PIN_MISMATCH));
+});
+
 test("AD-10: effects cannot be documented after bypassing admission", () => {
   const unadmitted = closureState({});
   const observation = recordObservedEffect(unadmitted, "EP1", {

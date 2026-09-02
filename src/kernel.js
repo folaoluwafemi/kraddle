@@ -343,9 +343,16 @@ export function resolveApplicableContext(state, {
 
   // Dependency edges come from state via pinned extractor evidence, never from the caller.
   const evidence = dependencyEvidenceId !== undefined ? state.evidence.get(dependencyEvidenceId) : undefined;
-  const evidencePinned = evidence !== undefined
-    && evidence.origin === "extractor"
-    && evidence.stateRef?.revision === revision;
+  const pin = evidence?.stateRef;
+  const evidencePinned =
+    typeof revision === "string" && revision.length > 0 &&
+    evidence !== undefined &&
+    evidence.origin === "extractor" &&
+    evidence.approval_state === "accepted" &&
+    typeof pin?.repository === "string" && pin.repository.length > 0 &&
+    typeof pin?.revision === "string" && pin.revision.length > 0 &&
+    typeof pin?.contentDigest === "string" && pin.contentDigest.length > 0 &&
+    pin.revision === revision;
   if (!evidencePinned) {
     addReason(DENIAL.EVIDENCE_PIN_MISMATCH);
   } else {
