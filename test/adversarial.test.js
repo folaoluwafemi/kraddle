@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import * as kernel from "../src/kernel.js";
 
-const { DENIAL, Workspace, admitEffect, emptyState, episodeStatus, id, validateEpisodeClosure } = kernel;
+const { DENIAL, Workspace, admitEffect, computeCoverageDigest, emptyState, episodeStatus, id, validateCoverage, validateEpisodeClosure } = kernel;
 
 const env = (over = {}) => ({
   origin: "human", epistemic_basis: "asserted",
@@ -238,6 +238,18 @@ test("AD-13: revoked authority suspends the next effect", async () => {
   }
 });
 
+const coverageObject = (over = {}) => {
+  const coverage = {
+    requiredSubjects: ["src/domain/a.ts"],
+    coveredSubjects: ["src/domain/a.ts"],
+    unknownSubjects: [],
+    excludedSubjects: [],
+    selectionMethod: "changed_files",
+    ...over,
+  };
+  return { ...coverage, coverageDigest: computeCoverageDigest(coverage) };
+};
+
 function closureState({ episode = {}, evaluation = {} } = {}) {
   const state = emptyState();
   state.units.set("EP1", {
@@ -249,6 +261,7 @@ function closureState({ episode = {}, evaluation = {} } = {}) {
   state.units.set("EV1", {
     id: "EV1", kind: "evaluation",
     stateRef: { repository: "repo", revision: "rev-b", contentDigest: "digest-b" },
+    coverage: coverageObject(),
     ...env(), ...evaluation,
   });
   state.commitments.set("purpose-c", commitmentRecord("purpose-c", "do work"));
@@ -309,4 +322,75 @@ test("AD-05: a base-revision evaluation cannot close a later revision", () => {
     evaluation: { stateRef: { repository: "repo", revision: "rev-b", contentDigest: "digest-b" } },
   });
   assert.deepEqual(validateEpisodeClosure(matched, "EP1"), { closable: true, episodeId: "EP1" });
+});
+
+test("AD-04: coverage cannot exclude changed files", () => {
+  const withDigest = (over = {}) => {
+    const coverage = {
+      requiredSubjects: ["src/domain/a.ts", "src/domain/b.ts"],
+      coveredSubjects: ["src/domain/a.ts"],
+      unknownSubjects: [],
+      excludedSubjects: [],
+      selectionMethod: "changed_files",
+      ...over,
+    };
+    return { ...coverage, coverageDigest: computeCoverageDigest(coverage) };
+  };
+
+  assert.throws(() => validateCoverage(withDigest()), (e) => {
+    assert.equal(e.code, DENIAL.COVERAGE_INCOMPLETE);
+    assert.deepEqual(e.detail.missing, ["src/domain/b.ts"]);
+    return true;
+  });
+
+  assert.throws(
+    () => validateCoverage(withDigest({ unknownSubjects: ["src/domain/c.ts"] })),
+    (e) => e.code === DENIAL.COVERAGE_UNKNOWN_NONEMPTY,
+  );
+
+  assert.throws(
+    () => validateCoverage(withDigest({
+      coveredSubjects: ["src/domain/a.ts", "src/domain/b.ts"],
+      excludedSubjects: ["src/gen/x.ts"],
+    })),
+    (e) => e.code === DENIAL.COVERAGE_EXCLUSION_NOT_PERMITTED,
+  );
+
+  const handEdited = withDigest();
+  handEdited.coverageDigest = "0".repeat(64);
+  assert.throws(
+    () => validateCoverage(handEdited),
+    (e) => e.code === DENIAL.COVERAGE_DIGEST_MISMATCH,
+  );
+
+  assert.throws(
+    () => validateCoverage(withDigest({ requiredSubjects: [""] })),
+    (e) => e.code === DENIAL.ENVELOPE_INVALID,
+  );
+
+  const digestOf = (requiredSubjects) =>
+    computeCoverageDigest({
+      requiredSubjects,
+      coveredSubjects: ["src/domain/a.ts"],
+      unknownSubjects: [],
+      excludedSubjects: [],
+    });
+  assert.equal(digestOf(["b", "a"]), digestOf(["a", "b"]));
+  assert.equal(digestOf(["a", "a", "b"]), digestOf(["a", "b"]));
+
+  assert.deepEqual(
+    validateCoverage(withDigest({ coveredSubjects: ["src/domain/a.ts", "src/domain/b.ts"] })),
+    { sufficient: true },
+  );
+
+  const insufficient = closureState({
+    evaluation: {
+      stateRef: { repository: "repo", revision: "rev-b", contentDigest: "digest-b" },
+      coverage: withDigest(),
+    },
+  });
+  assert.throws(
+    () => validateEpisodeClosure(insufficient, "EP1"),
+    (e) => e.code === DENIAL.COVERAGE_INCOMPLETE,
+  );
 });

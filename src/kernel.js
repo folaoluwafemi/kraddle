@@ -351,6 +351,59 @@ export function validateStateReference(ref) {
   return ref;
 }
 
+const SUBJECT_FIELDS = ["requiredSubjects", "coveredSubjects", "unknownSubjects", "excludedSubjects"];
+
+export function normalizeSubjectSet(list) {
+  if (!Array.isArray(list)) {
+    throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { reason: "subject_set_not_an_array" });
+  }
+  const seen = new Set();
+  const out = [];
+  for (const item of list) {
+    if (typeof item !== "string" || item.length === 0) {
+      throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { item });
+    }
+    if (!seen.has(item)) {
+      seen.add(item);
+      out.push(item);
+    }
+  }
+  return out.sort();
+}
+
+export function computeCoverageDigest(coverage) {
+  const payload = SUBJECT_FIELDS.map((field) => normalizeSubjectSet(coverage?.[field] ?? []));
+  return digest(JSON.stringify(payload));
+}
+
+export function validateCoverage(coverage, { permittedExclusions = [] } = {}) {
+  const normalized = {};
+  for (const field of SUBJECT_FIELDS) {
+    if (!Array.isArray(coverage?.[field])) {
+      throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { field });
+    }
+    normalized[field] = normalizeSubjectSet(coverage[field]);
+  }
+  const expected = computeCoverageDigest(coverage);
+  if (typeof coverage.coverageDigest !== "string" || coverage.coverageDigest !== expected) {
+    throw new ControlDenial(DENIAL.COVERAGE_DIGEST_MISMATCH, { expected, actual: coverage.coverageDigest });
+  }
+  if (normalized.unknownSubjects.length > 0) {
+    throw new ControlDenial(DENIAL.COVERAGE_UNKNOWN_NONEMPTY, { unknown: normalized.unknownSubjects });
+  }
+  const covered = new Set(normalized.coveredSubjects);
+  const missing = normalized.requiredSubjects.filter((subject) => !covered.has(subject));
+  if (missing.length) {
+    throw new ControlDenial(DENIAL.COVERAGE_INCOMPLETE, { missing });
+  }
+  const permitted = new Set(Array.isArray(permittedExclusions) ? permittedExclusions : []);
+  const notPermitted = normalized.excludedSubjects.filter((subject) => !permitted.has(subject));
+  if (notPermitted.length) {
+    throw new ControlDenial(DENIAL.COVERAGE_EXCLUSION_NOT_PERMITTED, { notPermitted });
+  }
+  return { sufficient: true };
+}
+
 export function validateEpisodeClosure(state, episodeId, workspace) {
   if (workspace !== undefined) requireTrustedProjection(workspace);
   const episode = profileRoot(state, episodeId);
@@ -376,7 +429,6 @@ export function validateEpisodeClosure(state, episodeId, workspace) {
     validateProfile(state, evaluation.id);
     if (evaluation.stateRef !== undefined) validateStateReference(evaluation.stateRef);
     const result = profileRole(state, evaluation.id, "result", "commitment");
-    const coverage = profileRole(state, evaluation.id, "coverage", "commitment");
     if (episode.resultingStateRef) {
       const ref = evaluation.stateRef;
       const fields = [];
@@ -394,7 +446,7 @@ export function validateEpisodeClosure(state, episodeId, workspace) {
       }
     }
     if (!result || result.value !== "satisfied") throw new ControlDenial(DENIAL.EVALUATION_NOT_SATISFIED, { episodeId, evaluationId: evaluation.id });
-    if (!coverage || coverage.value !== "complete") throw new ControlDenial(DENIAL.COVERAGE_INCOMPLETE, { episodeId, evaluationId: evaluation.id });
+    validateCoverage(evaluation.coverage, { permittedExclusions: episode.permittedExclusions ?? [] });
     if (evaluation.freshness === "stale" || evaluation.evaluationFailed) {
       throw new ControlDenial(DENIAL.EVALUATION_STALE, { episodeId, evaluationId: evaluation.id });
     }
