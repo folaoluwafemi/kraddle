@@ -4,8 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import * as kernel from "../src/kernel.js";
+import { extractDependencies } from "../src/extract.js";
 
-const { DENIAL, Workspace, admitEffect, classifyEffect, computeCoverageDigest, emptyState, episodeStatus, evaluate, id, recordObservedEffect, resolveApplicableContext, validateCoverage, validateEpisodeClosure } = kernel;
+const { DENIAL, Workspace, admitEffect, classifyEffect, computeCoverageDigest, emptyState, episodeStatus, evaluate, id, recordObservedEffect, resolveApplicableContext, validateCoverage, validateEpisodeClosure, verifyExtraction } = kernel;
 
 const env = (over = {}) => ({
   origin: "human", epistemic_basis: "asserted",
@@ -477,6 +478,7 @@ const evidenceRecord = (recordId, over = {}) => ({
   origin: "extractor",
   stateRef: { repository: "repo", revision: "rev-b", contentDigest: "digest-b" },
   edges: [{ from: "src/domain/a.ts", to: "src/ui/Button.tsx", resolution: "resolved" }],
+  extractionScope: { fromPrefixes: ["src/"] },
   ...over,
 });
 
@@ -560,7 +562,102 @@ test("a fully pinned evidence record cannot pin a context when revision is omitt
   state.evidence.set("EV-FULL", evidenceRecord("EV-FULL"));
   const result = resolveApplicableContext(state, { dependencyEvidenceId: "EV-FULL" });
   assert.equal(result.complete, false);
+  assert.ok(result.incompleteReasons.includes(DENIAL.EVIDENCE_SCOPE_MISMATCH) === false);
   assert.ok(result.incompleteReasons.includes(DENIAL.EVIDENCE_PIN_MISMATCH));
+});
+
+test("evidence with edges but no declared scope is refused", () => {
+  const state = emptyState();
+  state.evidence.set("EV-NOSCOPE", evidenceRecord("EV-NOSCOPE", { extractionScope: undefined }));
+  const result = resolveApplicableContext(state, {
+    revision: "rev-b",
+    dependencyEvidenceId: "EV-NOSCOPE",
+    targetPaths: ["src/domain/service.ts"],
+  });
+  assert.equal(result.complete, false);
+  assert.ok(result.incompleteReasons.includes(DENIAL.EVIDENCE_SCOPE_MISMATCH));
+});
+
+test("a targetPath outside the declared scope is refused", () => {
+  const state = emptyState();
+  state.evidence.set("EV-SCOPED", evidenceRecord("EV-SCOPED", {
+    extractionScope: { fromPrefixes: ["src/domain/"] },
+  }));
+  const result = resolveApplicableContext(state, {
+    revision: "rev-b",
+    dependencyEvidenceId: "EV-SCOPED",
+    targetPaths: ["src/ui/App.tsx"],
+  });
+  assert.equal(result.complete, false);
+  assert.ok(result.incompleteReasons.includes(DENIAL.EVIDENCE_SCOPE_MISMATCH));
+});
+
+test("an evidence edge outside its own declared scope is refused", () => {
+  const state = emptyState();
+  state.evidence.set("EV-CROSS", evidenceRecord("EV-CROSS", {
+    extractionScope: { fromPrefixes: ["src/domain/"] },
+    edges: [
+      { from: "src/domain/a.ts", to: "src/ui/Button.tsx", resolution: "resolved" },
+      { from: "src/other/x.ts", to: "src/ui/Button.tsx", resolution: "resolved" },
+    ],
+  }));
+  const result = resolveApplicableContext(state, {
+    revision: "rev-b",
+    dependencyEvidenceId: "EV-CROSS",
+    targetPaths: ["src/domain/a.ts"],
+  });
+  assert.equal(result.complete, false);
+  assert.ok(result.incompleteReasons.includes(DENIAL.EVIDENCE_SCOPE_MISMATCH));
+});
+
+test("verifyExtraction detects a cherry-picked edge set by recomputation", () => {
+  const files = {
+    "src/domain/a.ts": `import { b } from "./b";\n`,
+    "src/domain/b.ts": `export const b = 1;\n`,
+    "src/ui/c.tsx": `import React from "react";\n`,
+  };
+  const { edges } = extractDependencies(files);
+  const removed = edges.filter((edge) => !(edge.from === "src/domain/a.ts" && edge.to === "src/domain/b.ts"));
+  const evidence = {
+    edges: removed,
+    extractionScope: { fromPrefixes: ["src/"] },
+  };
+  const result = verifyExtraction(evidence, files);
+  assert.equal(result.verified, false);
+  assert.deepEqual(result.missing, [
+    { from: "src/domain/a.ts", to: "src/domain/b.ts", spec: "./b", resolution: "resolved" },
+  ]);
+  assert.deepEqual(result.extra, []);
+
+  const honest = { edges, extractionScope: { fromPrefixes: ["src/"] } };
+  assert.deepEqual(verifyExtraction(honest, files), { verified: true });
+});
+
+test("scoped evidence with in-scope targets and a full edge set completes", () => {
+  const state = emptyState();
+  addBinding(state, "CB1", { type: "path_prefix", value: "src/domain/" });
+  state.evidence.set("EV-OK", evidenceRecord("EV-OK", {
+    extractionScope: { fromPrefixes: ["src/"] },
+  }));
+  const result = resolveApplicableContext(state, {
+    revision: "rev-b",
+    dependencyEvidenceId: "EV-OK",
+    targetPaths: ["src/domain/service.ts"],
+    declaredApplicable: ["CB1"],
+  });
+  assert.equal(result.complete, true);
+  assert.deepEqual(result.applicable, ["CB1"]);
+
+  const files = {
+    "src/domain/a.ts": `import { b } from "./b";\n`,
+    "src/domain/b.ts": `export const b = 1;\n`,
+  };
+  const { edges } = extractDependencies(files);
+  const verified = verifyExtraction(
+    { edges: edges.filter((edge) => edge.from.startsWith("src/")), extractionScope: { fromPrefixes: ["src/"] } },
+    files,
+  );
+  assert.deepEqual(verified, { verified: true });
 });
 
 test("an episode without effects must explicitly declare no-op", () => {

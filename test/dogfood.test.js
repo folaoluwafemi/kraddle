@@ -101,6 +101,7 @@ test("the dogfood episode closes on real state", async () => {
       { type: "evidence.create", value: {
         id: "EV-DEP", kind: "evidence", ...env({ origin: "extractor", epistemic_basis: "observed" }),
         stateRef, edges: regionEdges, subjects,
+        extractionScope: { fromPrefixes: ["src/"] },
       } },
     ]);
 

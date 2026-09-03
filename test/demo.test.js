@@ -38,13 +38,14 @@ async function runDemoSequence(files) {
     { type: "relationship.add", value: rel("cb-evaluator", "CB1", "evaluator", "EV-UNIT", "unit") },
   ], { profileIds: ["CB1"] });
 
-  const { edges, subjects, limitations } = extractDependencies(files);
-  await store.transact([
-    { type: "evidence.create", value: {
-      id: "EV-DEP", kind: "evidence", ...env({ origin: "extractor", epistemic_basis: "observed" }),
-      stateRef, edges, subjects, limitations,
-    } },
-  ]);
+    const { edges, subjects, limitations } = extractDependencies(files);
+    await store.transact([
+      { type: "evidence.create", value: {
+        id: "EV-DEP", kind: "evidence", ...env({ origin: "extractor", epistemic_basis: "observed" }),
+        stateRef, edges, subjects, limitations,
+        extractionScope: { fromPrefixes: ["src/"] },
+      } },
+    ]);
 
   const resolved = resolveApplicableContext(store.state, {
     targetPaths: ["src/domain/service.ts"],

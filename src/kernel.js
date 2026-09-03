@@ -1,6 +1,7 @@
 import { access, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { extractDependencies } from "./extract.js";
 
 const PROFILE_KINDS = new Set(["control_binding", "evaluation", "execution_episode"]);
 const TERMINAL_EPISODE_STATES = new Set(["completed", "aborted"]);
@@ -65,8 +66,11 @@ export const DENIAL = Object.freeze({
   SEGMENT_COMMIT_MARKER_MISSING:    "SEGMENT_COMMIT_MARKER_MISSING",
   PROJECTION_UNTRUSTED:             "PROJECTION_UNTRUSTED",
   EVIDENCE_PIN_MISMATCH:            "EVIDENCE_PIN_MISMATCH",
+  EVIDENCE_SCOPE_MISMATCH:          "EVIDENCE_SCOPE_MISMATCH",
   WORKSPACE_EXISTS:                 "WORKSPACE_EXISTS",
   NO_OP_NOT_DECLARED:               "NO_OP_NOT_DECLARED",
+  PREFLIGHT_VIOLATED:               "PREFLIGHT_VIOLATED",
+  PREFLIGHT_UNKNOWN:                "PREFLIGHT_UNKNOWN",
 });
 
 function profileRoot(state, profileId) {
@@ -308,6 +312,26 @@ export function episodeStatus(state, episodeId) {
 
 const SUPPORTED_SELECTOR_TYPES = new Set(["exact_unit_id", "path_prefix", "scope_membership", "relationship_type"]);
 
+export function verifyExtraction(evidence, files) {
+  const scope = evidence?.extractionScope;
+  const fromPrefixes = Array.isArray(scope?.fromPrefixes) ? scope.fromPrefixes : [];
+  const underScope = (path) =>
+    typeof path === "string" && fromPrefixes.some((prefix) => path.startsWith(prefix));
+  const key = (edge) => JSON.stringify([edge.from, edge.to, edge.spec, edge.resolution]);
+  const declared = (Array.isArray(evidence?.edges) ? evidence.edges : [])
+    .filter((edge) => underScope(edge.from))
+    .map((edge) => ({ from: edge.from, to: edge.to, spec: edge.spec, resolution: edge.resolution }));
+  const computed = extractDependencies(files ?? {}).edges
+    .filter((edge) => underScope(edge.from))
+    .map((edge) => ({ from: edge.from, to: edge.to, spec: edge.spec, resolution: edge.resolution }));
+  const declaredKeys = new Set(declared.map(key));
+  const computedKeys = new Set(computed.map(key));
+  const missing = computed.filter((edge) => !declaredKeys.has(key(edge)));
+  const extra = declared.filter((edge) => !computedKeys.has(key(edge)));
+  if (missing.length || extra.length) return { verified: false, missing, extra };
+  return { verified: true };
+}
+
 export function resolveApplicableContext(state, {
   taskScopeId, targetPaths = [], revision, declaredApplicable = [], dependencyEvidenceId,
 } = {}) {
@@ -357,7 +381,23 @@ export function resolveApplicableContext(state, {
   if (!evidencePinned) {
     addReason(DENIAL.EVIDENCE_PIN_MISMATCH);
   } else {
-    for (const edge of evidence.edges ?? []) {
+    const edgeList = Array.isArray(evidence.edges) ? evidence.edges : [];
+    const scope = evidence.extractionScope;
+    const fromPrefixes = Array.isArray(scope?.fromPrefixes) ? scope.fromPrefixes : [];
+    const scopeDeclared = fromPrefixes.length > 0;
+    const underScope = (path) =>
+      typeof path === "string" && fromPrefixes.some((prefix) => path.startsWith(prefix));
+    if (edgeList.length > 0 && !scopeDeclared) {
+      addReason(DENIAL.EVIDENCE_SCOPE_MISMATCH);
+    } else if (scopeDeclared) {
+      if (!targetPaths.every(underScope)) {
+        addReason(DENIAL.EVIDENCE_SCOPE_MISMATCH);
+      }
+      if (edgeList.some((edge) => !underScope(edge.from))) {
+        addReason(DENIAL.EVIDENCE_SCOPE_MISMATCH);
+      }
+    }
+    for (const edge of edgeList) {
       if (edge.resolution === "ambiguous" || edge.resolution === "unresolved") {
         unresolvedEdges.push({ from: edge.from, to: edge.to, resolution: edge.resolution });
         addReason(DENIAL.UNRESOLVED_DEPENDENCY_EDGE);
