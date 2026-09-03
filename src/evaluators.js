@@ -31,3 +31,35 @@ export function architectureRuleEvaluator({ sourcePrefix, forbiddenPrefix, files
   else result = "satisfied";
   return { result, coverage };
 }
+
+export function runEvaluator(evaluatorUnit, files) {
+  const evaluatorType = evaluatorUnit?.evaluatorType;
+  if (evaluatorType !== "architecture_rule") {
+    return { result: "unknown", reason: "unknown_evaluator_type" };
+  }
+  const params = evaluatorUnit?.params;
+  const sourcePrefix = params?.sourcePrefix;
+  const forbiddenPrefixes = params?.forbiddenPrefixes;
+  if (
+    typeof sourcePrefix !== "string" || sourcePrefix.length === 0 ||
+    !Array.isArray(forbiddenPrefixes) || forbiddenPrefixes.length === 0 ||
+    !forbiddenPrefixes.every((prefix) => typeof prefix === "string" && prefix.length > 0)
+  ) {
+    return { result: "unknown", reason: "evaluator_params_invalid" };
+  }
+  const runs = forbiddenPrefixes.map((forbiddenPrefix) =>
+    architectureRuleEvaluator({ sourcePrefix, forbiddenPrefix, files }),
+  );
+  const result = runs.some((run) => run.result === "violated") ? "violated"
+    : runs.some((run) => run.result === "unknown") ? "unknown"
+    : "satisfied";
+  const coverage = {
+    requiredSubjects: [...new Set(runs.flatMap((run) => run.coverage.requiredSubjects))].sort(),
+    coveredSubjects: [...new Set(runs.flatMap((run) => run.coverage.coveredSubjects))].sort(),
+    unknownSubjects: [...new Set(runs.flatMap((run) => run.coverage.unknownSubjects))].sort(),
+    excludedSubjects: [],
+    selectionMethod: "source_prefix_files_combined",
+  };
+  coverage.coverageDigest = computeCoverageDigest(coverage);
+  return { result, coverage };
+}
