@@ -3,7 +3,7 @@ import { createInterface } from "node:readline";
 import { isAbsolute, join, dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createMcpServer } from "./mcp.js";
-import { computeFileMapDigest } from "./extract.js";
+import { computeFileMapDigest, extractDependencies } from "./extract.js";
 import { runEvaluator } from "./evaluators.js";
 import {
   ControlDenial,
@@ -11,9 +11,11 @@ import {
   Workspace,
   admitEffect,
   episodeStatus,
+  evaluate,
   recordObservedEffect,
   requireTrustedProjection,
   resolveApplicableContext,
+  validateEpisodeClosure,
 } from "./kernel.js";
 import { readRepoFiles } from "./repo.js";
 
@@ -53,6 +55,20 @@ function asToolResult(handler) {
     }
   };
 }
+
+const rel = (recordId, profileId, role, targetId, targetType, at) => ({
+  id: recordId,
+  kind: "relationship",
+  profileId,
+  role,
+  targetId,
+  targetType,
+  origin: "extractor",
+  epistemic_basis: "derived",
+  approval_state: "proposed",
+  freshness_state: "current",
+  recorded_at: at,
+});
 
 function episodeAuthorityUnit(state, episodeId) {
   for (const relationship of state.relationships.values()) {
@@ -101,6 +117,7 @@ export async function createKraddleServer({ repoDir, workspaceDir, episodeId, ba
   const baseRevision = episode.baseStateRef.revision;
 
   async function preflight(path, content) {
+    const state = workspace.state;
     const proposedMap = { ...baseFiles, [path]: content };
     const acceptedBindings = [...state.units.values()]
       .filter((unit) => unit.kind === "control_binding" && unit.approval_state === "accepted")
@@ -151,7 +168,7 @@ export async function createKraddleServer({ repoDir, workspaceDir, episodeId, ba
       handler: asToolResult(async ({ path }) => {
         requireTrustedProjection(workspace);
         validateToolPath(path);
-        admitEffect(state, episodeId, { operation: "read", target: path });
+        admitEffect(workspace.state, episodeId, { operation: "read", target: path });
         const content = baseFiles[path];
         if (content === undefined) {
           throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { path, reason: "file_not_in_base_state" });
@@ -173,12 +190,12 @@ export async function createKraddleServer({ repoDir, workspaceDir, episodeId, ba
         if (typeof content !== "string") {
           throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { path, reason: "content_required" });
         }
-        const admission = admitEffect(state, episodeId, { operation: "write", target: path });
+        const admission = admitEffect(workspace.state, episodeId, { operation: "write", target: path });
         await preflight(path, content);
         const fullPath = join(repoDir, ...path.split("/"));
         await mkdir(dirname(fullPath), { recursive: true });
         await writeFile(fullPath, content, "utf8");
-        recordObservedEffect(state, episodeId, {
+        recordObservedEffect(workspace.state, episodeId, {
           operation: "write",
           target: path,
           admissionId: admission.admissionId,
@@ -193,7 +210,105 @@ export async function createKraddleServer({ repoDir, workspaceDir, episodeId, ba
       inputSchema: { type: "object", properties: {} },
       handler: asToolResult(async () => {
         requireTrustedProjection(workspace);
-        throw new ControlDenial(DENIAL.EPISODE_NOT_ACTIVE, { episodeId, reason: "not_implemented" });
+        const { files: currentFiles } = await readRepoFiles(repoDir);
+        const expectedFiles = { ...baseFiles, ...Object.fromEntries(admittedWrites) };
+        const allPaths = new Set([...Object.keys(expectedFiles), ...Object.keys(currentFiles)]);
+        const unadmitted = [...allPaths]
+          .filter((path) => expectedFiles[path] !== currentFiles[path])
+          .sort();
+        if (unadmitted.length) {
+          throw new ControlDenial(DENIAL.UNCONTROLLED_EFFECT, { episodeId, paths: unadmitted });
+        }
+
+        const baseRef = workspace.state.units.get(episodeId).baseStateRef;
+        const worktreeStateRef = {
+          repository: baseRef.repository,
+          revision: `${baseRef.revision}+worktree`,
+          contentDigest: computeFileMapDigest(currentFiles),
+        };
+
+        const now = Date.now();
+        const evidenceId = `EV-RESULT-${now}`;
+        const { edges: currentEdges } = extractDependencies(currentFiles);
+        await workspace.transact([
+          { type: "evidence.create", value: {
+            id: evidenceId,
+            kind: "evidence",
+            origin: "extractor",
+            epistemic_basis: "observed",
+            approval_state: "accepted",
+            freshness_state: "current",
+            recorded_at: now,
+            stateRef: worktreeStateRef,
+            edges: currentEdges,
+            extractionScope: { fromPrefixes: ["src/"] },
+          } },
+        ], { actorId: "policy-closure" });
+
+        const state = workspace.state;
+        const acceptedBindings = [...state.units.values()]
+          .filter((unit) => unit.kind === "control_binding" && unit.approval_state === "accepted")
+          .map((unit) => unit.id);
+        const resolver = resolveApplicableContext(state, {
+          targetPaths: Object.keys(currentFiles).filter((path) => path.startsWith("src/")),
+          revision: worktreeStateRef.revision,
+          declaredApplicable: acceptedBindings,
+          dependencyEvidenceId: evidenceId,
+        });
+
+        const operations = [];
+        const evaluationIds = [];
+        for (const bindingId of resolver.applicable) {
+          const evaluatorUnit = profileRoleRecords(state, bindingId, "evaluator")[0];
+          if (!evaluatorUnit) continue;
+          const governed = profileRoleRecords(state, bindingId, "governed_commitment")[0];
+          const scope = profileRoleRecords(state, episodeId, "target_scope")[0];
+          const evaluationId = `EV-CLOSURE-${bindingId}`;
+          const evaluation = await evaluate(state, {
+            evaluationId,
+            evaluatorId: evaluatorUnit.id,
+            evaluatorVersion: "0.1.0",
+            subjects: Object.keys(currentFiles).filter((path) => path.startsWith("src/")).sort(),
+            stateRef: worktreeStateRef,
+            run: () => runEvaluator(evaluatorUnit, currentFiles),
+          });
+          evaluationIds.push(evaluationId);
+          operations.push(
+            { type: "unit.create", value: evaluation },
+            { type: "commitment.create", value: {
+              id: `${evaluationId}-result`, kind: "commitment", value: evaluation.result,
+              origin: "extractor", epistemic_basis: "derived", approval_state: "proposed",
+              freshness_state: "current", recorded_at: now,
+            } },
+            { type: "commitment.create", value: {
+              id: `${evaluationId}-coverage`, kind: "commitment", value: "typed",
+              origin: "extractor", epistemic_basis: "derived", approval_state: "proposed",
+              freshness_state: "current", recorded_at: now,
+            } },
+            { type: "unit.create", value: {
+              id: `${evaluationId}-sel`, kind: "selector",
+              origin: "extractor", epistemic_basis: "derived", approval_state: "proposed",
+              freshness_state: "current", recorded_at: now,
+            } },
+            { type: "relationship.add", value: rel(`${evaluationId}-r1`, evaluationId, "target_commitment", governed.id, "commitment", now) },
+            { type: "relationship.add", value: rel(`${evaluationId}-r2`, evaluationId, "target_selector", `${evaluationId}-sel`, "unit", now) },
+            { type: "relationship.add", value: rel(`${evaluationId}-r3`, evaluationId, "source_scope", scope.id, "scope", now) },
+            { type: "relationship.add", value: rel(`${evaluationId}-r4`, evaluationId, "evaluator", evaluatorUnit.id, "unit", now) },
+            { type: "relationship.add", value: rel(`${evaluationId}-r5`, evaluationId, "result", `${evaluationId}-result`, "commitment", now) },
+            { type: "relationship.add", value: rel(`${evaluationId}-r6`, evaluationId, "coverage", `${evaluationId}-coverage`, "commitment", now) },
+            { type: "relationship.add", value: rel(`${evaluationId}-r7`, episodeId, "proof_obligation", evaluationId, "unit", now) },
+          );
+        }
+
+        const episodeNow = workspace.state.units.get(episodeId);
+        operations.push({
+          type: "unit.update",
+          value: { ...episodeNow, resultingStateRef: worktreeStateRef },
+        });
+        await workspace.transact(operations, { actorId: "policy-closure", profileIds: evaluationIds });
+
+        validateEpisodeClosure(workspace.state, episodeId);
+        return { text: `episode ${episodeId} closed; resulting contentDigest ${worktreeStateRef.contentDigest}` };
       }),
     },
   ];

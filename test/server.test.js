@@ -9,6 +9,7 @@ import { computeFileMapDigest, extractDependencies } from "../src/extract.js";
 import { Workspace } from "../src/kernel.js";
 import { gitStateRef, readRepoFiles } from "../src/repo.js";
 import { createKraddleServer } from "../src/server.js";
+import { writeFile as fsWriteFile } from "node:fs/promises";
 
 const exec = promisify(execFile);
 
@@ -158,6 +159,78 @@ test("a clean write is admitted, written, and observed with its admission id", a
     );
     assert.equal(onDisk, content);
     assert.equal(server.admittedWrites.get("src/domain/service.ts"), content);
+  } finally {
+    await rm(repoDir, { recursive: true, force: true });
+    await rm(workspaceDir, { recursive: true, force: true });
+  }
+});
+
+test("closure succeeds on a clean flow and persists the resulting records", async () => {
+  const { repoDir, workspaceDir, server, files } = await bootstrap();
+  try {
+    const write = server.tools.find((tool) => tool.name === "kraddle_write_file");
+    const content = "export const service = () => 1;\n";
+    const written = await write.handler({ path: "src/domain/service.ts", content });
+    assert.ok(!written.isError);
+
+    const close = server.tools.find((tool) => tool.name === "kraddle_close_episode");
+    const closed = await close.handler({});
+    assert.ok(!closed.isError, closed?.text);
+    const expectedDigest = computeFileMapDigest({ ...files, "src/domain/service.ts": content });
+    assert.ok(closed.text.includes(expectedDigest));
+
+    const reloaded = new Workspace(workspaceDir);
+    const loadResult = await reloaded.load();
+    assert.equal(loadResult.trusted, true);
+    const worktreeEvidence = [...loadResult.state.evidence.values()].find(
+      (record) => record.stateRef?.revision?.endsWith("+worktree"),
+    );
+    assert.ok(worktreeEvidence, "resulting evidence must persist");
+    assert.equal(worktreeEvidence.origin, "extractor");
+    assert.equal(worktreeEvidence.approval_state, "accepted");
+    const evaluation = [...loadResult.state.units.values()].find((unit) => unit.kind === "evaluation");
+    assert.ok(evaluation, "evaluation profile must persist");
+    assert.equal(evaluation.result, "satisfied");
+    assert.equal(evaluation.stateRef.revision, worktreeEvidence.stateRef.revision);
+    const proofObligation = [...loadResult.state.relationships.values()].some(
+      (relationship) => relationship.profileId === "EP1" && relationship.role === "proof_obligation",
+    );
+    assert.ok(proofObligation, "proof obligation must persist");
+  } finally {
+    await rm(repoDir, { recursive: true, force: true });
+    await rm(workspaceDir, { recursive: true, force: true });
+  }
+});
+
+test("closure refuses an episode whose working tree contains an unadmitted change", async () => {
+  const { repoDir, workspaceDir, server } = await bootstrap();
+  try {
+    const write = server.tools.find((tool) => tool.name === "kraddle_write_file");
+    const written = await write.handler({ path: "src/domain/service.ts", content: "export const service = () => 1;\n" });
+    assert.ok(!written.isError);
+
+    await fsWriteFile(join(repoDir, "src", "domain", "rogue.ts"), "export const rogue = 1;\n", "utf8");
+
+    const close = server.tools.find((tool) => tool.name === "kraddle_close_episode");
+    const closed = await close.handler({});
+    assert.equal(closed.isError, true);
+    assert.ok(closed.text.includes("UNCONTROLLED_EFFECT"));
+    assert.ok(closed.text.includes("src/domain/rogue.ts"));
+  } finally {
+    await rm(repoDir, { recursive: true, force: true });
+    await rm(workspaceDir, { recursive: true, force: true });
+  }
+});
+
+test("a read is denied when the authority omits the read operation", async () => {
+  const { repoDir, workspaceDir, server } = await bootstrap({
+    authority: { operations: ["write"], targetPrefix: "src/domain/" },
+  });
+  try {
+    const read = server.tools.find((tool) => tool.name === "kraddle_read_file");
+    const result = await read.handler({ path: "src/domain/a.ts" });
+    assert.equal(result.isError, true);
+    assert.ok(result.text.includes("OPERATION_NOT_AUTHORIZED"));
   } finally {
     await rm(repoDir, { recursive: true, force: true });
     await rm(workspaceDir, { recursive: true, force: true });
