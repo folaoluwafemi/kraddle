@@ -1,11 +1,58 @@
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createInterface } from "node:readline";
+import { isAbsolute, join, dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createMcpServer } from "./mcp.js";
 import { computeFileMapDigest } from "./extract.js";
-import { ControlDenial, DENIAL, Workspace, episodeStatus, requireTrustedProjection } from "./kernel.js";
+import { runEvaluator } from "./evaluators.js";
+import {
+  ControlDenial,
+  DENIAL,
+  Workspace,
+  admitEffect,
+  episodeStatus,
+  recordObservedEffect,
+  requireTrustedProjection,
+  resolveApplicableContext,
+} from "./kernel.js";
 import { readRepoFiles } from "./repo.js";
 
 const SERVER_INFO = { name: "kraddle-agent-surface", version: "0.1.0" };
+
+function profileRoleRecords(state, profileId, role) {
+  const out = [];
+  for (const relationship of state.relationships.values()) {
+    if (relationship.profileId !== profileId || relationship.role !== role) continue;
+    const target =
+      relationship.targetType === "unit" ? state.units.get(relationship.targetId)
+      : relationship.targetType === "commitment" ? state.commitments.get(relationship.targetId)
+      : relationship.targetType === "scope" ? state.scopes.get(relationship.targetId)
+      : relationship.targetType === "evidence" ? state.evidence.get(relationship.targetId)
+      : undefined;
+    if (target) out.push(target);
+  }
+  return out;
+}
+
+function validateToolPath(path) {
+  if (typeof path !== "string" || path.length === 0) {
+    throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { path, reason: "invalid_path" });
+  }
+  if (isAbsolute(path) || path.includes("\\") || path.split("/").includes("..")) {
+    throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { path, reason: "path_escape" });
+  }
+  return path;
+}
+
+function asToolResult(handler) {
+  return async (args) => {
+    try {
+      return await handler(args ?? {});
+    } catch (thrown) {
+      return { text: thrown instanceof Error ? thrown.message : String(thrown), isError: true };
+    }
+  };
+}
 
 function episodeAuthorityUnit(state, episodeId) {
   for (const relationship of state.relationships.values()) {
@@ -51,6 +98,47 @@ export async function createKraddleServer({ repoDir, workspaceDir, episodeId, ba
   }
 
   const admittedWrites = new Map();
+  const baseRevision = episode.baseStateRef.revision;
+
+  async function preflight(path, content) {
+    const proposedMap = { ...baseFiles, [path]: content };
+    const acceptedBindings = [...state.units.values()]
+      .filter((unit) => unit.kind === "control_binding" && unit.approval_state === "accepted")
+      .map((unit) => unit.id);
+    const resolver = resolveApplicableContext(state, {
+      targetPaths: [path],
+      revision: baseRevision,
+      declaredApplicable: acceptedBindings,
+      dependencyEvidenceId: baseEvidenceId,
+    });
+    if (resolver.complete === false) {
+      throw new ControlDenial(DENIAL.PREFLIGHT_UNKNOWN, {
+        path,
+        reasons: resolver.incompleteReasons,
+      });
+    }
+    for (const bindingId of resolver.applicable) {
+      const evaluatorUnit = profileRoleRecords(state, bindingId, "evaluator")[0];
+      if (!evaluatorUnit) continue;
+      const governed = profileRoleRecords(state, bindingId, "governed_commitment")[0];
+      const outcome = runEvaluator(evaluatorUnit, proposedMap);
+      if (outcome.result === "violated") {
+        throw new ControlDenial(DENIAL.PREFLIGHT_VIOLATED, {
+          path,
+          bindingId,
+          commitment: governed?.value,
+        });
+      }
+      if (outcome.result !== "satisfied") {
+        throw new ControlDenial(DENIAL.PREFLIGHT_UNKNOWN, {
+          path,
+          bindingId,
+          reason: outcome.reason ?? outcome.result,
+        });
+      }
+    }
+  }
+
   const tools = [
     {
       name: "kraddle_read_file",
@@ -60,7 +148,16 @@ export async function createKraddleServer({ repoDir, workspaceDir, episodeId, ba
         properties: { path: { type: "string" } },
         required: ["path"],
       },
-      handler: async () => ({ text: "not implemented", isError: true }),
+      handler: asToolResult(async ({ path }) => {
+        requireTrustedProjection(workspace);
+        validateToolPath(path);
+        admitEffect(state, episodeId, { operation: "read", target: path });
+        const content = baseFiles[path];
+        if (content === undefined) {
+          throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { path, reason: "file_not_in_base_state" });
+        }
+        return { text: content };
+      }),
     },
     {
       name: "kraddle_write_file",
@@ -70,13 +167,34 @@ export async function createKraddleServer({ repoDir, workspaceDir, episodeId, ba
         properties: { path: { type: "string" }, content: { type: "string" } },
         required: ["path", "content"],
       },
-      handler: async () => ({ text: "not implemented", isError: true }),
+      handler: asToolResult(async ({ path, content }) => {
+        requireTrustedProjection(workspace);
+        validateToolPath(path);
+        if (typeof content !== "string") {
+          throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { path, reason: "content_required" });
+        }
+        const admission = admitEffect(state, episodeId, { operation: "write", target: path });
+        await preflight(path, content);
+        const fullPath = join(repoDir, ...path.split("/"));
+        await mkdir(dirname(fullPath), { recursive: true });
+        await writeFile(fullPath, content, "utf8");
+        recordObservedEffect(state, episodeId, {
+          operation: "write",
+          target: path,
+          admissionId: admission.admissionId,
+        });
+        admittedWrites.set(path, content);
+        return { text: `admitted ${path} under admission ${admission.admissionId}` };
+      }),
     },
     {
       name: "kraddle_close_episode",
       description: "Request closure of the episode; unadmitted working-tree changes are refused.",
       inputSchema: { type: "object", properties: {} },
-      handler: async () => ({ text: "not implemented", isError: true }),
+      handler: asToolResult(async () => {
+        requireTrustedProjection(workspace);
+        throw new ControlDenial(DENIAL.EPISODE_NOT_ACTIVE, { episodeId, reason: "not_implemented" });
+      }),
     },
   ];
 
