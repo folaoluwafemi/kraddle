@@ -191,8 +191,8 @@ export async function createKraddleServer({ repoDir, workspaceDir, episodeId, ba
         if (typeof content !== "string") {
           throw new ControlDenial(DENIAL.ENVELOPE_INVALID, { path, reason: "content_required" });
         }
-        const admission = admitEffect(workspace.state, episodeId, { operation: "write", target: path });
         await preflight(path, content);
+        const admission = admitEffect(workspace.state, episodeId, { operation: "write", target: path });
         const fullPath = join(repoDir, ...path.split("/"));
         await mkdir(dirname(fullPath), { recursive: true });
         await writeFile(fullPath, content, "utf8");

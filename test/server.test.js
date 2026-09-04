@@ -321,6 +321,29 @@ test("closure denies on resolver incompleteness, same as preflight", async () =>
   }
 });
 
+test("a denied write leaves no admission ledger entry", async () => {
+  const { repoDir, workspaceDir, server } = await bootstrap();
+  try {
+    const write = server.tools.find((tool) => tool.name === "kraddle_write_file");
+    const denied = await write.handler({
+      path: "src/domain/service.ts",
+      content: 'import { Button } from "../ui/Button";\nexport const service = Button;\n',
+    });
+    assert.equal(denied.isError, true);
+    assert.ok(denied.text.includes("PREFLIGHT_VIOLATED"));
+    const episode = server.state.units.get("EP1");
+    assert.equal(episode.admittedEffects?.length ?? 0, 0);
+
+    const clean = await write.handler({ path: "src/domain/service.ts", content: "export const service = () => 1;\n" });
+    assert.ok(!clean.isError);
+    assert.equal(server.state.units.get("EP1").admittedEffects.length, 1);
+    assert.equal(server.state.units.get("EP1").observedEffects.length, 1);
+  } finally {
+    await rm(repoDir, { recursive: true, force: true });
+    await rm(workspaceDir, { recursive: true, force: true });
+  }
+});
+
 test("a read is denied when the authority omits the read operation", async () => {
   const { repoDir, workspaceDir, server } = await bootstrap({
     authority: { operations: ["write"], targetPrefix: "src/domain/" },
