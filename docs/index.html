@@ -37,6 +37,7 @@
           <p class="nav-heading">START HERE</p>
           <a class="nav-link active" href="#overview">Overview</a>
           <a class="nav-link" href="#quickstart">Quickstart</a>
+          <a class="nav-link" href="#testing-guide">Testing guide</a>
 
           <p class="nav-heading">CORE CONCEPTS</p>
           <a class="nav-link" href="#meaning-model">Meaning model</a>
@@ -114,18 +115,89 @@
         <section class="doc-section" id="quickstart" data-title="Quickstart">
           <p class="eyebrow">START HERE</p>
           <h1>Quickstart</h1>
-          <p class="lead">Model one behavior, connect it to implementation, and attach evidence.</p>
-          <div class="warning"><span>!</span><p><strong>Illustrative syntax.</strong> No Kraddle CLI or readable source language is implemented yet. This walkthrough demonstrates the intended semantics only.</p></div>
+          <p class="lead">Install Kraddle, declare one rule in your own words, and let your agent work inside it.</p>
+          <div class="note"><span class="note-icon">i</span><div><strong>Requirements.</strong><p>Node 20 or newer, git on PATH, an MCP-capable agent client. No runtime dependencies. Commands below use <code>node src/cli.js</code>; run <code>npm link</code> once to get the shorter <code>kraddle</code> command.</p></div></div>
           <div class="steps">
-            <article><span>1</span><div><h3>Initialize the workspace</h3><p>Kraddle creates the project-native directory.</p><pre><code>kraddle init</code><button class="copy-button" aria-label="Copy code">Copy</button></pre></div></article>
-            <article><span>2</span><div><h3>Capture a commitment</h3><pre><code>unit u1 behavior "Resume investigation"
-commit c1 u1 is_for "Restore prior research context"
-commit c2 u1 must_preserve "Never mutate research data"</code><button class="copy-button" aria-label="Copy code">Copy</button></pre></div></article>
-            <article><span>3</span><div><h3>Connect implementation</h3><pre><code>unit u2 function "restoreContext"
-relate u1 implemented_by u2 accepted
-observe u2 input "questionId"
-observe u2 output "ResearchContext"</code><button class="copy-button" aria-label="Copy code">Copy</button></pre></div></article>
+            <article><span>1</span><div><h3>Install</h3><p>Clone the repository and run npm install inside it. There is nothing else to install.</p><pre><code>git clone &lt;kraddle-repo-url&gt; kraddle
+cd kraddle
+npm install</code><button class="copy-button" aria-label="Copy code">Copy</button></pre></div></article>
+            <article><span>2</span><div><h3>Initialize the workspace</h3><p>From your own repository root, create the Kraddle workspace. This creates <code>.kraddle/</code> and refuses to overwrite one that already exists.</p><pre><code>cd /path/to/your/repo
+node /path/to/kraddle/src/cli.js init</code><button class="copy-button" aria-label="Copy code">Copy</button></pre></div></article>
+            <article><span>3</span><div><h3>Declare one rule</h3><p>Use your own sentence. The rule is pinned to your current git revision and the dependency evidence extracted at that revision.</p><pre><code>node /path/to/kraddle/src/cli.js rule add \
+  --source src/domain \
+  --forbid src/ui \
+  --text "domain must not import ui"</code><button class="copy-button" aria-label="Copy code">Copy</button></pre></div></article>
+            <article><span>4</span><div><h3>Launch an episode</h3><p>This prints four environment variables. Save them — the server needs all four.</p><pre><code>node /path/to/kraddle/src/cli.js episode start \
+  --task "add a small domain service" \
+  --write-prefix src/domain</code><button class="copy-button" aria-label="Copy code">Copy</button></pre></div></article>
+            <article><span>5</span><div><h3>Start the agent surface</h3><p>Export the four printed variables, then start the server. It validates the episode, the authority, and that your working tree still matches the pinned state before it serves anything.</p><pre><code>export KRADDLE_REPO=/path/to/your/repo \
+       KRADDLE_WORKSPACE_DIR=/path/to/your/repo \
+       KRADDLE_EPISODE_ID=&lt;printed-id&gt; \
+       KRADDLE_BASE_EVIDENCE_ID=&lt;printed-id&gt;
+cd /path/to/kraddle
+npm start</code><button class="copy-button" aria-label="Copy code">Copy</button></pre></div></article>
+            <article><span>6</span><div><h3>Point your agent at it</h3><p>The server speaks MCP over stdio. Most clients accept this shape:</p><pre><code>{
+  "mcpServers": {
+    "kraddle": {
+      "command": "node",
+      "args": ["/path/to/kraddle/src/server.js"],
+      "env": {
+        "KRADDLE_REPO": "/path/to/your/repo",
+        "KRADDLE_WORKSPACE_DIR": "/path/to/your/repo",
+        "KRADDLE_EPISODE_ID": "printed-id",
+        "KRADDLE_BASE_EVIDENCE_ID": "printed-id"
+      }
+    }
+  }
+}</code><button class="copy-button" aria-label="Copy code">Copy</button></pre></div></article>
           </div>
+          <h2 id="what-you-should-see">What you should see</h2>
+          <div class="property-table">
+            <div><code>Three tools only</code><span>The agent gets read a file, write a file, and request episode closure. Nothing that can change rules, authority, or records.</span></div>
+            <div><code>Denied with your words</code><span>A write that would violate your rule is denied and your rule text is quoted back. The file is never written.</span></div>
+            <div><code>Closure refused</code><span>If files changed outside the tools — including package.json — closing the episode is refused and the paths are named.</span></div>
+          </div>
+          <div class="warning"><span>!</span><p><strong>What Kraddle is not doing.</strong> There is no sandbox. An agent can still write files directly; Kraddle denies admission for violating writes, refuses to record unadmitted changes as controlled execution, and offers no tool that can weaken the governing rule. It detects and refuses — it does not prevent.</p></div>
+        </section>
+
+        <section class="doc-section" id="testing-guide" data-title="Testing guide">
+          <p class="eyebrow">START HERE</p>
+          <h1>Testing guide</h1>
+          <p class="lead">A scripted way to try Kraddle against your own repository and agent. Set up via the quickstart first, then work through the six scenarios.</p>
+          <h2 id="the-six-scenarios">The six scenarios</h2>
+          <div class="property-table">
+            <div><code>1. Read</code><span>Ask the agent to read a file under your rule's source prefix. <strong>Expected:</strong> content returned, no complaint.</span></div>
+            <div><code>2. Clean write</code><span>Ask the agent to add or edit a file that obeys your rule. <strong>Expected:</strong> admitted with an admission id; the file exists on disk.</span></div>
+            <div><code>3. Rule violation</code><span>Ask the agent to write a file that imports from your forbidden prefix. <strong>Expected:</strong> denied before disk is touched; the denial quotes your rule text.</span></div>
+            <div><code>4. Weaken the rule</code><span>Ask the agent to change or remove the rule so the write passes. <strong>Expected:</strong> it cannot — no such tool exists. If it tampers with <code>.kraddle/</code> directly, the next load quarantines the workspace and the server refuses to serve.</span></div>
+            <div><code>5. Bypass</code><span>Change any file directly on disk — try package.json — without using the tools, then ask the agent to close the episode. <strong>Expected:</strong> closure refused; the changed path is named.</span></div>
+            <div><code>6. Restart</code><span>After admitted writes, start a second server for the same episode. <strong>Expected:</strong> refused — an episode with admitted effects cannot be re-entered from a new process.</span></div>
+          </div>
+          <h2 id="useful-commands">Useful commands</h2>
+          <div class="property-table">
+            <div><code>status</code><span><code>node src/cli.js status [--repo dir]</code> — workspace trust state, declared rules, episodes and their states. Run this after scenario 4 to see the quarantine.</span></div>
+            <div><code>abort</code><span><code>node src/cli.js episode abort &lt;id&gt;</code> — ends an episode you do not want to close.</span></div>
+            <div><code>tests</code><span><code>npm test</code> in the kraddle clone — 101 passing conformance tests, including the full journey this guide describes.</span></div>
+          </div>
+          <h2 id="denials-explained">Denials you may hit</h2>
+          <div class="property-table">
+            <div><code>PREFLIGHT_VIOLATED</code><span>The write breaks your rule. Reword the change, not the rule.</span></div>
+            <div><code>PREFLIGHT_UNKNOWN</code><span>Kraddle could not verify the write — commonly a dynamic <code>import(variable)</code>. Verification failure denies by design; static imports resolve fine.</span></div>
+            <div><code>TARGET_OUTSIDE_AUTHORITY</code><span>The write is outside the write-prefix the episode was started with. Start a wider episode or write elsewhere.</span></div>
+            <div><code>UNCONTROLLED_EFFECT</code><span>Closure found working-tree changes that did not go through the tools. Revert them or take ownership of them outside the episode.</span></div>
+            <div><code>EPISODE_ALREADY_ACTIVE</code><span>An episode with admitted effects cannot be re-entered by a new server process. Start a fresh episode.</span></div>
+            <div><code>EVIDENCE_PIN_MISMATCH</code><span>Your repository changed since the episode started (for example you committed). Start a new episode from the new state.</span></div>
+            <div><code>CONTEXT_INCOMPLETE</code><span>The governing context could not be fully resolved. The denial lists the reasons; nothing proceeds until they are resolved.</span></div>
+          </div>
+          <h2 id="honest-limits">Honest limits</h2>
+          <div class="property-table">
+            <div><code>Perimeter</code><span>Advisory. Kraddle refuses and records; it does not prevent. See the warning in the quickstart.</span></div>
+            <div><code>Extraction</code><span>Regex-based import extraction. Unrecognized or dynamic imports become unknowns that block writes — fail-closed, not silently ignored.</span></div>
+            <div><code>Episodes</code><span>One episode per server run. No multi-episode orchestration yet.</span></div>
+            <div><code>After you commit</code><span>Pinned state is stale the moment you commit or switch branches. Start a new episode.</span></div>
+          </div>
+          <h2 id="what-to-record">What to record</h2>
+          <p>If you are evaluating Kraddle, note four things per session: what you expected when a write was denied; what the denial text made you do next; how you would feel about the agent being unable to edit the rule that governs it; and whether you would install it again (1-5). Verbatim answers are more useful than summaries.</p>
         </section>
 
         <section class="doc-section" id="meaning-model" data-title="Meaning model">
