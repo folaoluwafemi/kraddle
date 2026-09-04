@@ -19,8 +19,8 @@ usage:
 defaults: --repo is the current working directory.
 The CLI is the human trust root; the agent only ever sees the MCP server.`;
 
-function fail(message) {
-  return { code: 1, output: `${message}\n\n${USAGE}` };
+function fail(message, { usage = true } = {}) {
+  return { code: 1, output: usage ? `${message}\n\n${USAGE}` : `${message}\n(run "kraddle help" for usage)` };
 }
 
 function parseArgs(argv) {
@@ -86,7 +86,7 @@ async function commandRuleAdd({ flags, rawArgv }) {
     ({ files } = await readRepoFiles(repo));
     git = await gitStateRef(repo);
   } catch (thrown) {
-    return fail(`rule add could not read the repository at ${repo}: ${messageOf(thrown)}`);
+    return fail(`rule add could not read the repository at ${repo}: ${messageOf(thrown)}`, { usage: false });
   }
   const stateRef = { repository: git.repository, revision: git.revision, contentDigest: computeFileMapDigest(files) };
   const { edges } = extractDependencies(files);
@@ -108,10 +108,10 @@ async function commandRuleAdd({ flags, rawArgv }) {
   try {
     loadResult = await workspace.load();
   } catch {
-    return fail(`no workspace found at ${joinHuman(repo, ".kraddle")} — run "kraddle init" first.`);
+    return fail(`no workspace found at ${joinHuman(repo, ".kraddle")} — run "kraddle init" first.`, { usage: false });
   }
   if (loadResult.trusted === false) {
-    return fail(`the workspace at ${joinHuman(repo, ".kraddle")} is quarantined and cannot take new rules (${loadResult.quarantined.map((entry) => entry.code).join(", ")}).`);
+    return fail(`the workspace at ${joinHuman(repo, ".kraddle")} is quarantined and cannot take new rules (${loadResult.quarantined.map((entry) => entry.code).join(", ")}).`, { usage: false });
   }
 
   const bindingId = `CB-${randomId()}`;
@@ -257,7 +257,7 @@ async function commandEpisodeStart({ flags }) {
   });
   if (resolver.complete === false) {
     const explanations = resolver.incompleteReasons.map(explainReason).join("\n  ");
-    return fail(`episode start refused: the governing context is incomplete, so an episode cannot launch honestly.\n  ${explanations}`);
+    return fail(`episode start refused: the governing context is incomplete, so an episode cannot launch honestly.\n  ${explanations}`, { usage: false });
   }
 
   const episodeId = `EP-${randomId()}`;
