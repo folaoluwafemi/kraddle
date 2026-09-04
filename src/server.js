@@ -102,6 +102,16 @@ export async function createKraddleServer({ repoDir, workspaceDir, episodeId, ba
   if (authority.expiresAt && authority.expiresAt <= Date.now()) {
     throw new ControlDenial(DENIAL.AUTHORITY_EXPIRED, { episodeId });
   }
+  // The in-memory admittedWrites map is the admission ledger for one server
+  // run; a restart cannot recover it, so an already-active episode must not
+  // be re-entered. Refusing is the only honest behavior until admissions
+  // are persisted (future work, out of scope here).
+  if ((Array.isArray(episode.admittedEffects) && episode.admittedEffects.length > 0)) {
+    throw new ControlDenial(DENIAL.EPISODE_ALREADY_ACTIVE, {
+      episodeId,
+      admittedCount: episode.admittedEffects.length,
+    });
+  }
 
   const { files: baseFiles } = await readRepoFiles(repoDir);
   const baseDigest = computeFileMapDigest(baseFiles);
@@ -116,6 +126,36 @@ export async function createKraddleServer({ repoDir, workspaceDir, episodeId, ba
 
   const admittedWrites = new Map();
   const baseRevision = episode.baseStateRef.revision;
+
+  // The admission ledger must survive restart detection: persisted through a
+  // policy-actor transact so a restarted server can see the episode is active
+  // and refuse to fork its state.
+  async function persistEpisodeActivity() {
+    const live = workspace.state.units.get(episodeId);
+    await workspace.transact(
+      [
+        {
+          type: "unit.update",
+          value: {
+            ...live,
+            admittedEffects: (live.admittedEffects ?? []).map(({ admissionId, admittedAt, operation, target }) => ({
+              admissionId,
+              admittedAt,
+              operation,
+              target,
+            })),
+            observedEffects: (live.observedEffects ?? []).map(({ admissionId, observedAt, operation, target }) => ({
+              admissionId,
+              observedAt,
+              operation,
+              target,
+            })),
+          },
+        },
+      ],
+      { actorId: "policy-closure" },
+    );
+  }
 
   async function preflight(path, content) {
     const state = workspace.state;
@@ -202,6 +242,7 @@ export async function createKraddleServer({ repoDir, workspaceDir, episodeId, ba
           admissionId: admission.admissionId,
         });
         admittedWrites.set(path, content);
+        await persistEpisodeActivity();
         return { text: `admitted ${path} under admission ${admission.admissionId}` };
       }),
     },

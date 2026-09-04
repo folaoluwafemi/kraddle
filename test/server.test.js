@@ -344,6 +344,34 @@ test("a denied write leaves no admission ledger entry", async () => {
   }
 });
 
+test("a restarted server refuses an already-active episode", async () => {
+  const { repoDir, workspaceDir, server } = await bootstrap();
+  try {
+    const write = server.tools.find((tool) => tool.name === "kraddle_write_file");
+    const written = await write.handler({ path: "src/domain/service.ts", content: "export const service = () => 1;\n" });
+    assert.ok(!written.isError);
+    // No closure: the episode is left active with an admitted effect.
+
+    await assert.rejects(
+      () => createKraddleServer({
+        repoDir,
+        workspaceDir,
+        episodeId: "EP1",
+        baseEvidenceId: "EV-BASE",
+      }),
+      (e) => {
+        assert.equal(e.code, "EPISODE_ALREADY_ACTIVE");
+        assert.equal(e.detail.episodeId, "EP1");
+        assert.equal(e.detail.admittedCount, 1);
+        return true;
+      },
+    );
+  } finally {
+    await rm(repoDir, { recursive: true, force: true });
+    await rm(workspaceDir, { recursive: true, force: true });
+  }
+});
+
 test("a read is denied when the authority omits the read operation", async () => {
   const { repoDir, workspaceDir, server } = await bootstrap({
     authority: { operations: ["write"], targetPrefix: "src/domain/" },

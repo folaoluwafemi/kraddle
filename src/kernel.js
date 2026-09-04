@@ -71,6 +71,7 @@ export const DENIAL = Object.freeze({
   NO_OP_NOT_DECLARED:               "NO_OP_NOT_DECLARED",
   PREFLIGHT_VIOLATED:               "PREFLIGHT_VIOLATED",
   PREFLIGHT_UNKNOWN:                "PREFLIGHT_UNKNOWN",
+  EPISODE_ALREADY_ACTIVE:           "EPISODE_ALREADY_ACTIVE",
 });
 
 function profileRoot(state, profileId) {
