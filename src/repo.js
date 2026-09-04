@@ -18,9 +18,29 @@ export async function readRepoFiles(rootDir, {
   maxFiles = 5000,
   maxBytes = 1_000_000,
 } = {}) {
+  const extensionSet = new Set(extensions);
+  return walkFiles(rootDir, {
+    maxFiles,
+    maxBytes,
+    includeFile: (name) => extensionSet.has(extensionOf(name)),
+  });
+}
+
+export async function readWorktreeFiles(rootDir, {
+  maxFiles = 20000,
+  maxBytes = 5_000_000,
+} = {}) {
+  return walkFiles(rootDir, { maxFiles, maxBytes, includeFile: () => true });
+}
+
+function extensionOf(name) {
+  const toPosix = name.split("\\").join("/");
+  return toPosix.match(/\.[^.]+$/)?.[0] ?? "";
+}
+
+async function walkFiles(rootDir, { maxFiles, maxBytes, includeFile }) {
   const files = {};
   const skipped = [];
-  const extensionSet = new Set(extensions);
 
   async function walk(dir, relativePrefix) {
     let entries;
@@ -37,7 +57,7 @@ export async function readRepoFiles(rootDir, {
         await walk(join(dir, entry.name), relative);
       } else if (entry.isFile()) {
         if (entry.name.startsWith(".")) continue;
-        if (!extensionSet.has(toPosix(entry.name).match(/\.[^.]+$/)?.[0] ?? "")) continue;
+        if (!includeFile(entry.name)) continue;
         if (Object.keys(files).length >= maxFiles) {
           throw new Error(`readRepoFiles: maxFiles (${maxFiles}) exceeded at ${relative}`);
         }

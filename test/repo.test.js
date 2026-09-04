@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { test } from "node:test";
 import { computeFileMapDigest } from "../src/extract.js";
 import { DENIAL } from "../src/kernel.js";
-import { gitStateRef, IGNORED_DIRS, readRepoFiles } from "../src/repo.js";
+import { gitStateRef, IGNORED_DIRS, readRepoFiles, readWorktreeFiles } from "../src/repo.js";
 
 const exec = promisify(execFile);
 
@@ -80,6 +80,42 @@ test("an empty directory yields an empty map without throwing", async () => {
 
 test("IGNORED_DIRS contains the Phase 1 ignore set", () => {
   assert.deepEqual(IGNORED_DIRS, ["node_modules", ".git", ".kraddle", "dist", "build", "coverage"]);
+});
+
+test("readWorktreeFiles observes every non-ignored file regardless of extension", async () => {
+  const root = await tempRoot();
+  try {
+    await mkdir(join(root, "src"), { recursive: true });
+    await mkdir(join(root, "node_modules"), { recursive: true });
+    await writeFile(join(root, "src", "a.ts"), "export const a = 1;\n");
+    await writeFile(join(root, "package.json"), '{\n  "name": "x"\n}\n');
+    await writeFile(join(root, "README.md"), "# readme\n");
+    await writeFile(join(root, ".gitignore"), "node_modules\n");
+    await writeFile(join(root, "node_modules", "x.js"), "module.exports = 1;\n");
+    const { files, skipped } = await readWorktreeFiles(root);
+    assert.deepEqual(Object.keys(files).sort(), ["README.md", "package.json", "src/a.ts"]);
+    assert.deepEqual(skipped, []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the source-filtered map is a strict subset of the worktree map", async () => {
+  const root = await tempRoot();
+  try {
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "a.ts"), "export const a = 1;\n");
+    await writeFile(join(root, "package.json"), '{\n  "name": "x"\n}\n');
+    await writeFile(join(root, "README.md"), "# readme\n");
+    const source = await readRepoFiles(root);
+    const worktree = await readWorktreeFiles(root);
+    for (const [path, content] of Object.entries(source.files)) {
+      assert.equal(worktree.files[path], content);
+    }
+    assert.ok(Object.keys(worktree.files).length > Object.keys(source.files).length);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 async function makeTempGitRepo() {
