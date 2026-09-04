@@ -6,5 +6,8 @@
     "test": "node --test",
     "start": "node src/server.js",
     "test:adversarial": "node --test test/adversarial.test.js"
+  },
+  "bin": {
+    "kraddle": "src/cli.js"
   }
 }
