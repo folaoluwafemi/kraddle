@@ -91,6 +91,17 @@ async function commandRuleAdd({ flags, rawArgv }) {
   const stateRef = { repository: git.repository, revision: git.revision, contentDigest: computeFileMapDigest(files) };
   const { edges } = extractDependencies(files);
   const scopedEdges = edges.filter((edge) => edge.from.startsWith(source));
+  const sourceFiles = Object.keys(files).filter((path) => path.startsWith(source));
+  if (sourceFiles.length === 0) {
+    const candidates = [...new Set(Object.keys(files).map((path) => `${path.split("/")[0]}/`))]
+      .filter((prefix) => Object.keys(files).some((path) => path.startsWith(prefix)))
+      .sort();
+    return fail(
+      `no source files found under "${source}" — the rule would govern nothing.\n` +
+      `  prefixes that exist in this repo: ${candidates.join("  ") || "(none)"}\n` +
+      `  pick a --source that contains files.`,
+    );
+  }
 
   const workspace = new Workspace(repo);
   let loadResult;
@@ -239,7 +250,7 @@ async function commandEpisodeStart({ flags }) {
     .filter((unit) => unit.kind === "control_binding" && unit.approval_state === "accepted")
     .map((unit) => unit.id);
   const resolver = resolveApplicableContext(state, {
-    targetPaths: Object.keys(files),
+    targetPaths: Object.keys(files).filter((path) => path.startsWith("src/")),
     revision: git.revision,
     declaredApplicable: acceptedBindings,
     dependencyEvidenceId: evidenceId,
