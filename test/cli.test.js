@@ -190,3 +190,52 @@ test("episode start requires --write-prefix", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+async function bootstrappedRepo() {
+  const root = await tempRepo();
+  await runCli(["init", "--repo", root]);
+  await runCli([
+    "rule", "add", "--repo", root,
+    "--source", "src/domain", "--forbid", "src/ui",
+    "--text", "domain must not import ui",
+  ]);
+  const started = await runCli([
+    "episode", "start", "--repo", root,
+    "--task", "add a domain service",
+    "--write-prefix", "src/domain",
+  ]);
+  assert.equal(started.code, 0, started.output);
+  const episodeId = started.output.match(/KRADDLE_EPISODE_ID=(\S+)/)[1];
+  return { root, episodeId };
+}
+
+test("status names rules and episodes", async () => {
+  const { root, episodeId } = await bootstrappedRepo();
+  try {
+    const result = await runCli(["status", "--repo", root]);
+    assert.equal(result.code, 0, result.output);
+    assert.ok(result.output.includes("trusted"), result.output);
+    assert.ok(result.output.includes("domain must not import ui"), result.output);
+    assert.ok(result.output.includes(episodeId), result.output);
+    assert.ok(result.output.includes("authorized"), result.output);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("abort sets the episode lifecycle to aborted", async () => {
+  const { root, episodeId } = await bootstrappedRepo();
+  try {
+    const result = await runCli(["episode", "abort", episodeId, "--repo", root]);
+    assert.equal(result.code, 0, result.output);
+    const store = new Workspace(root);
+    await store.load();
+    assert.equal(store.state.units.get(episodeId).lifecycle, "aborted");
+
+    const unknown = await runCli(["episode", "abort", "EP-doesnotexist", "--repo", root]);
+    assert.equal(unknown.code, 1);
+    assert.ok(!/    at /.test(unknown.output));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

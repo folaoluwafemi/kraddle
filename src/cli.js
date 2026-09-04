@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { pathToFileURL } from "node:url";
-import { ControlDenial, DENIAL, resolveApplicableContext, validateProfile, Workspace } from "./kernel.js";
+import { ControlDenial, DENIAL, episodeStatus, resolveApplicableContext, validateProfile, Workspace } from "./kernel.js";
 import { computeFileMapDigest, extractDependencies } from "./extract.js";
 import { gitStateRef, readRepoFiles } from "./repo.js";
 
@@ -315,6 +315,87 @@ function explainReason(code) {
   }
 }
 
+async function loadWorkspaceOr(repo, refuse) {
+  const workspace = new Workspace(repo);
+  let loadResult;
+  try {
+    loadResult = await workspace.load();
+  } catch {
+    return refuse(`no workspace found at ${joinHuman(repo, ".kraddle")} — run "kraddle init" first.`);
+  }
+  if (loadResult.trusted === false) {
+    return refuse(`the workspace at ${joinHuman(repo, ".kraddle")} is quarantined (${loadResult.quarantined.map((entry) => entry.code).join(", ")}).`);
+  }
+  return { workspace, loadResult };
+}
+
+async function commandStatus({ flags }) {
+  const repo = flags.repo ?? process.cwd();
+  const lines = [];
+  const outcome = await loadWorkspaceOr(repo, (message) => message);
+  if (typeof outcome === "string") {
+    return fail(outcome);
+  }
+  const { workspace, loadResult } = outcome;
+  lines.push(`workspace ${joinHuman(repo, ".kraddle")} — trusted: ${loadResult.trusted}${loadResult.quarantined.length ? `, quarantined segments: ${loadResult.quarantined.length}` : ""}`);
+  lines.push("");
+  const state = workspace.state;
+  const bindings = [...state.units.values()].filter((unit) => unit.kind === "control_binding");
+  lines.push(`rules (${bindings.length}):`);
+  for (const binding of bindings) {
+    const governedId = [...state.relationships.values()].find(
+      (relationship) => relationship.profileId === binding.id && relationship.role === "governed_commitment",
+    )?.targetId;
+    const text = governedId ? state.commitments.get(governedId)?.value : undefined;
+    const shown = typeof text === "string" && text.length > 60 ? `${text.slice(0, 60)}…` : (text ?? "(no commitment text)");
+    lines.push(`  ${binding.id}  "${shown}"  [${binding.approval_state}]`);
+  }
+  lines.push("");
+  const episodes = [...state.units.values()].filter((unit) => unit.kind === "execution_episode");
+  lines.push(`episodes (${episodes.length}):`);
+  for (const episode of episodes) {
+    const status = episodeStatus(state, episode.id);
+    const admitted = Array.isArray(episode.admittedEffects) ? episode.admittedEffects.length : 0;
+    lines.push(`  ${episode.id}  ${status}  admitted effects: ${admitted}`);
+  }
+  return { code: 0, output: lines.join("\n") };
+}
+
+async function commandEpisodeAbort({ flags, positional }) {
+  const repo = flags.repo ?? process.cwd();
+  const episodeId = positional[1];
+  if (typeof episodeId !== "string" || episodeId.length === 0) {
+    return fail("episode abort requires the episode id, e.g. kraddle episode abort EP-xxxx.");
+  }
+  const outcome = await loadWorkspaceOr(repo, (message) => message);
+  if (typeof outcome === "string") {
+    return fail(outcome);
+  }
+  const { workspace } = outcome;
+  const episode = workspace.state.units.get(episodeId);
+  if (!episode || episode.kind !== "execution_episode") {
+    return fail(`no episode with id ${episodeId} exists in this workspace.`);
+  }
+  const now = Date.now();
+  try {
+    await workspace.transact([
+      {
+        type: "unit.update",
+        value: {
+          ...episode,
+          lifecycle: "aborted",
+          origin: "human",
+          epistemic_basis: "asserted",
+          recorded_at: now,
+        },
+      },
+    ]);
+  } catch (thrown) {
+    return fail(`episode abort failed: ${messageOf(thrown)}`);
+  }
+  return { code: 0, output: `episode ${episodeId} aborted.` };
+}
+
 async function commandInit({ flags }) {
   const repo = flags.repo ?? process.cwd();
   const workspace = new Workspace(repo);
@@ -364,12 +445,17 @@ export async function runCli(argv, { cwd } = {}) {
         if (subcommand === "start") {
           return await commandEpisodeStart(parsed);
         }
+        if (subcommand === "abort") {
+          return await commandEpisodeAbort(parsed);
+        }
         return fail(`unknown episode subcommand: ${subcommand ?? "(none)"} — try "kraddle episode start"`);
       }
       case "status":
+        return await commandStatus(parsed);
       case "help":
+        return { code: 0, output: USAGE };
       case undefined:
-        return fail(`command not implemented yet: ${command ?? "(none)"}`);
+        return fail("no command given.");
       default:
         return fail(`unknown command: ${command}`);
     }

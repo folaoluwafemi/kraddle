@@ -18,6 +18,7 @@ import {
   validateEpisodeClosure,
 } from "./kernel.js";
 import { readRepoFiles, readWorktreeFiles } from "./repo.js";
+import { describeDenial } from "./denials-text.js";
 
 const SERVER_INFO = { name: "kraddle-agent-surface", version: "0.1.0" };
 
@@ -51,6 +52,9 @@ function asToolResult(handler) {
     try {
       return await handler(args ?? {});
     } catch (thrown) {
+      if (thrown instanceof ControlDenial) {
+        return { text: describeDenial(thrown.code, thrown.detail), isError: true };
+      }
       return { text: thrown instanceof Error ? thrown.message : String(thrown), isError: true };
     }
   };
