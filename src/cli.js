@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { pathToFileURL } from "node:url";
-import { ControlDenial, DENIAL, validateProfile, Workspace } from "./kernel.js";
+import { ControlDenial, DENIAL, resolveApplicableContext, validateProfile, Workspace } from "./kernel.js";
 import { computeFileMapDigest, extractDependencies } from "./extract.js";
 import { gitStateRef, readRepoFiles } from "./repo.js";
 
@@ -169,6 +169,152 @@ function randomId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+async function commandEpisodeStart({ flags }) {
+  const repo = flags.repo ?? process.cwd();
+  const task = flags.task;
+  if (typeof task !== "string" || task.trim().length === 0) {
+    return fail("episode start requires --task describing what the episode is for.");
+  }
+  const writePrefix = normalizePrefix(flags["write-prefix"]);
+  if (typeof writePrefix !== "string" || writePrefix.length === 0) {
+    return fail("episode start requires --write-prefix, the path prefix writes are bounded to (e.g. src/domain).");
+  }
+  const readOnly = flags["read-only"] === true;
+
+  let files;
+  let git;
+  try {
+    ({ files } = await readRepoFiles(repo));
+    git = await gitStateRef(repo);
+  } catch (thrown) {
+    return fail(`episode start could not read the repository at ${repo}: ${messageOf(thrown)}`);
+  }
+  const stateRef = { repository: git.repository, revision: git.revision, contentDigest: computeFileMapDigest(files) };
+  const { edges } = extractDependencies(files);
+  const scopedEdges = edges.filter((edge) => edge.from.startsWith("src/"));
+
+  const workspace = new Workspace(repo);
+  let loadResult;
+  try {
+    loadResult = await workspace.load();
+  } catch {
+    return fail(`no workspace found at ${joinHuman(repo, ".kraddle")} — run "kraddle init" first.`);
+  }
+  if (loadResult.trusted === false) {
+    return fail(`the workspace at ${joinHuman(repo, ".kraddle")} is quarantined (${loadResult.quarantined.map((entry) => entry.code).join(", ")}).`);
+  }
+
+  const now = Date.now();
+  const human = (record) => ({
+    origin: "human",
+    epistemic_basis: "asserted",
+    approval_state: "accepted",
+    freshness_state: "current",
+    recorded_at: now,
+    ...record,
+  });
+
+  const evidenceId = `EV-${randomId()}`;
+  try {
+    await workspace.transact([
+      { type: "evidence.create", value: {
+        id: evidenceId,
+        kind: "evidence",
+        origin: "extractor",
+        epistemic_basis: "observed",
+        approval_state: "accepted",
+        freshness_state: "current",
+        recorded_at: now,
+        stateRef,
+        edges: scopedEdges,
+        extractionScope: { fromPrefixes: ["src/"] },
+      } },
+    ]);
+  } catch (thrown) {
+    return fail(`episode start failed while recording base evidence: ${messageOf(thrown)}`);
+  }
+
+  const state = workspace.state;
+  const acceptedBindings = [...state.units.values()]
+    .filter((unit) => unit.kind === "control_binding" && unit.approval_state === "accepted")
+    .map((unit) => unit.id);
+  const resolver = resolveApplicableContext(state, {
+    targetPaths: Object.keys(files),
+    revision: git.revision,
+    declaredApplicable: acceptedBindings,
+    dependencyEvidenceId: evidenceId,
+  });
+  if (resolver.complete === false) {
+    const explanations = resolver.incompleteReasons.map(explainReason).join("\n  ");
+    return fail(`episode start refused: the governing context is incomplete, so an episode cannot launch honestly.\n  ${explanations}`);
+  }
+
+  const episodeId = `EP-${randomId()}`;
+  const purposeId = `EP-${randomId()}-purpose`;
+  const baseId = `EP-${randomId()}-base`;
+  const outcomeId = `EP-${randomId()}-outcome`;
+  const contextId = `EP-${randomId()}-ctx`;
+  const authorityId = `EP-${randomId()}-auth`;
+  const deltaId = `EP-${randomId()}-delta`;
+  const scopeId = `SC-${randomId()}`;
+
+  const operations = [
+    { type: "commitment.create", value: human({ id: purposeId, kind: "commitment", value: task }) },
+    { type: "commitment.create", value: human({ id: baseId, kind: "commitment", value: git.revision }) },
+    { type: "commitment.create", value: human({ id: outcomeId, kind: "commitment", value: "completed under governing commitments" }) },
+    { type: "unit.create", value: human({ id: contextId, kind: "context_envelope", valid: true, completeness: "complete", complete: resolver.complete, incompleteReasons: resolver.incompleteReasons }) },
+    { type: "unit.create", value: human({ id: authorityId, kind: "authority_grant", operations: readOnly ? ["read"] : ["read", "write"], targetPrefix: writePrefix, allowRecordIds: [] }) },
+    { type: "unit.create", value: human({ id: deltaId, kind: "software_element" }) },
+    { type: "scope.create", value: human({ id: scopeId, kind: "scope" }) },
+    { type: "unit.create", value: human({ id: episodeId, kind: "execution_episode", lifecycle: "authorized", baseStateRef: stateRef, resultingStateRef: stateRef, noOp: true }) },
+    { type: "relationship.add", value: human({ id: `${episodeId}-r1`, kind: "relationship", profileId: episodeId, role: "purpose", targetId: purposeId, targetType: "commitment" }) },
+    { type: "relationship.add", value: human({ id: `${episodeId}-r2`, kind: "relationship", profileId: episodeId, role: "target_scope", targetId: scopeId, targetType: "scope" }) },
+    { type: "relationship.add", value: human({ id: `${episodeId}-r3`, kind: "relationship", profileId: episodeId, role: "base_revision", targetId: baseId, targetType: "commitment" }) },
+    { type: "relationship.add", value: human({ id: `${episodeId}-r4`, kind: "relationship", profileId: episodeId, role: "context_envelope", targetId: contextId, targetType: "unit" }) },
+    { type: "relationship.add", value: human({ id: `${episodeId}-r5`, kind: "relationship", profileId: episodeId, role: "authority_grant", targetId: authorityId, targetType: "unit" }) },
+    { type: "relationship.add", value: human({ id: `${episodeId}-r6`, kind: "relationship", profileId: episodeId, role: "intended_delta", targetId: deltaId, targetType: "unit" }) },
+    { type: "relationship.add", value: human({ id: `${episodeId}-r7`, kind: "relationship", profileId: episodeId, role: "outcome", targetId: outcomeId, targetType: "commitment" }) },
+  ];
+
+  try {
+    await workspace.transact(operations, { profileIds: [episodeId] });
+  } catch (thrown) {
+    return fail(`episode start failed: ${messageOf(thrown)}`);
+  }
+
+  const sep = repo.includes("\\") ? "\\" : "/";
+  return {
+    code: 0,
+    output: [
+      `episode ${episodeId} started (lifecycle authorized).`,
+      `The agent surface refused nothing at launch: the governing context is complete.`,
+      ``,
+      `Paste these to run the MCP server (npm start):`,
+      `KRADDLE_REPO=${repo}`,
+      `KRADDLE_WORKSPACE_DIR=${repo.replace(/[\\/]$/, "")}${sep}.kraddle`,
+      `KRADDLE_EPISODE_ID=${episodeId}`,
+      `KRADDLE_BASE_EVIDENCE_ID=${evidenceId}`,
+    ].join("\n"),
+  };
+}
+
+function explainReason(code) {
+  switch (code) {
+    case "OMITTED_APPLICABLE_COMMITMENT":
+      return "OMITTED_APPLICABLE_COMMITMENT — a governing rule applies to this repository but was not counted; declare it with rule add.";
+    case "UNRESOLVED_SELECTOR":
+      return "UNRESOLVED_SELECTOR — a rule uses a selector this runtime cannot evaluate.";
+    case "UNRESOLVED_DEPENDENCY_EDGE":
+      return "UNRESOLVED_DEPENDENCY_EDGE — the dependency evidence contains an import that could not be resolved statically.";
+    case "EVIDENCE_PIN_MISMATCH":
+      return "EVIDENCE_PIN_MISMATCH — the dependency evidence is missing, not accepted, or pinned to a different revision.";
+    case "EVIDENCE_SCOPE_MISMATCH":
+      return "EVIDENCE_SCOPE_MISMATCH — the evidence record's contents do not match the extraction region it declares.";
+    default:
+      return `${code} — (no description yet)`;
+  }
+}
+
 async function commandInit({ flags }) {
   const repo = flags.repo ?? process.cwd();
   const workspace = new Workspace(repo);
@@ -213,8 +359,13 @@ export async function runCli(argv, { cwd } = {}) {
         parsed.rawArgv = rest;
         return await commandRuleAdd(parsed);
       }
-      case "rule":
-      case "episode":
+      case "episode": {
+        const subcommand = parsed.positional[0];
+        if (subcommand === "start") {
+          return await commandEpisodeStart(parsed);
+        }
+        return fail(`unknown episode subcommand: ${subcommand ?? "(none)"} — try "kraddle episode start"`);
+      }
       case "status":
       case "help":
       case undefined:

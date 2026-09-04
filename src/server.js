@@ -132,12 +132,16 @@ export async function createKraddleServer({ repoDir, workspaceDir, episodeId, ba
   // and refuse to fork its state.
   async function persistEpisodeActivity() {
     const live = workspace.state.units.get(episodeId);
+    const hasEffects =
+      (Array.isArray(live.admittedEffects) && live.admittedEffects.length > 0) ||
+      (Array.isArray(live.observedEffects) && live.observedEffects.length > 0);
     await workspace.transact(
       [
         {
           type: "unit.update",
           value: {
             ...live,
+            noOp: hasEffects ? false : live.noOp,
             admittedEffects: (live.admittedEffects ?? []).map(({ admissionId, admittedAt, operation, target }) => ({
               admissionId,
               admittedAt,

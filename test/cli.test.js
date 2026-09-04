@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { test } from "node:test";
 import { runCli } from "../src/cli.js";
 import { validateProfile, Workspace } from "../src/kernel.js";
+import { createKraddleServer } from "../src/server.js";
 import { readRepoFiles } from "../src/repo.js";
 import { extractDependencies } from "../src/extract.js";
 
@@ -122,6 +123,65 @@ test("rule add requires --text", async () => {
     const result = await runCli([
       "rule", "add", "--repo", root,
       "--source", "src/domain", "--forbid", "src/ui",
+    ]);
+    assert.equal(result.code, 1);
+    assert.ok(result.output.includes("usage"), result.output);
+    assert.ok(!/    at /.test(result.output));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("episode start prints env vars the server can boot from", async () => {
+  const root = await tempRepo();
+  try {
+    await runCli(["init", "--repo", root]);
+    await runCli([
+      "rule", "add", "--repo", root,
+      "--source", "src/domain", "--forbid", "src/ui",
+      "--text", "domain must not import ui",
+    ]);
+    const result = await runCli([
+      "episode", "start", "--repo", root,
+      "--task", "add a domain service",
+      "--write-prefix", "src/domain",
+    ]);
+    assert.equal(result.code, 0, result.output);
+
+    const env = {};
+    for (const line of result.output.split("\n")) {
+      const match = line.match(/^(KRADDLE_[A-Z_]+)=(.*)$/);
+      if (match) env[match[1]] = match[2];
+    }
+    assert.equal(env.KRADDLE_REPO, root);
+    assert.ok(env.KRADDLE_WORKSPACE_DIR);
+    assert.ok(env.KRADDLE_EPISODE_ID);
+    assert.ok(env.KRADDLE_BASE_EVIDENCE_ID);
+
+    const server = await createKraddleServer({
+      repoDir: env.KRADDLE_REPO,
+      workspaceDir: root,
+      episodeId: env.KRADDLE_EPISODE_ID,
+      baseEvidenceId: env.KRADDLE_BASE_EVIDENCE_ID,
+    });
+    assert.ok(server.tools.length === 3);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("episode start requires --write-prefix", async () => {
+  const root = await tempRepo();
+  try {
+    await runCli(["init", "--repo", root]);
+    await runCli([
+      "rule", "add", "--repo", root,
+      "--source", "src/domain", "--forbid", "src/ui",
+      "--text", "domain must not import ui",
+    ]);
+    const result = await runCli([
+      "episode", "start", "--repo", root,
+      "--task", "add a domain service",
     ]);
     assert.equal(result.code, 1);
     assert.ok(result.output.includes("usage"), result.output);
