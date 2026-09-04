@@ -232,6 +232,7 @@ export async function createKraddleServer({ repoDir, workspaceDir, episodeId, ba
         const now = Date.now();
         const evidenceId = `EV-RESULT-${now}`;
         const { edges: currentEdges } = extractDependencies(currentFiles);
+        const scopedEdges = currentEdges.filter((edge) => edge.from.startsWith("src/"));
         await workspace.transact([
           { type: "evidence.create", value: {
             id: evidenceId,
@@ -242,7 +243,7 @@ export async function createKraddleServer({ repoDir, workspaceDir, episodeId, ba
             freshness_state: "current",
             recorded_at: now,
             stateRef: worktreeStateRef,
-            edges: currentEdges,
+            edges: scopedEdges,
             extractionScope: { fromPrefixes: ["src/"] },
           } },
         ], { actorId: "policy-closure" });
@@ -257,6 +258,12 @@ export async function createKraddleServer({ repoDir, workspaceDir, episodeId, ba
           declaredApplicable: acceptedBindings,
           dependencyEvidenceId: evidenceId,
         });
+        if (resolver.complete === false) {
+          throw new ControlDenial(DENIAL.CONTEXT_INCOMPLETE, {
+            episodeId,
+            reasons: resolver.incompleteReasons,
+          });
+        }
 
         const operations = [];
         const evaluationIds = [];

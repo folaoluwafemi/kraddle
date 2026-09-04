@@ -19,12 +19,16 @@ const env = (over = {}) => ({
   recorded_at: 1756771200000, ...over,
 });
 
-async function bootstrap({ authority = { operations: ["read", "write"], targetPrefix: "src/domain/" } } = {}) {
+async function bootstrap({ authority = { operations: ["read", "write"], targetPrefix: "src/domain/" }, testFixture = false } = {}) {
   const repoDir = await mkdtemp(join(tmpdir(), "kraddle-repo-"));
   await mkdir(join(repoDir, "src", "domain"), { recursive: true });
   await mkdir(join(repoDir, "src", "ui"), { recursive: true });
   await writeFile(join(repoDir, "src", "domain", "a.ts"), "export const a = 1;\n");
   await writeFile(join(repoDir, "src", "ui", "Button.tsx"), 'import React from "react";\n');
+  if (testFixture) {
+    await mkdir(join(repoDir, "test"), { recursive: true });
+    await writeFile(join(repoDir, "test", "fixture.test.js"), 'import { thing } from "./missing";\n');
+  }
   await exec("git", ["init"], { cwd: repoDir });
   await exec("git", ["config", "user.email", "test@example.com"], { cwd: repoDir });
   await exec("git", ["config", "user.name", "Test"], { cwd: repoDir });
@@ -35,6 +39,7 @@ async function bootstrap({ authority = { operations: ["read", "write"], targetPr
   const { repository, revision } = await gitStateRef(repoDir);
   const stateRef = { repository, revision, contentDigest: computeFileMapDigest(files) };
   const { edges } = extractDependencies(files);
+  const scopedEdges = edges.filter((edge) => edge.from.startsWith("src/"));
 
   const workspaceDir = await mkdtemp(join(tmpdir(), "kraddle-ws-"));
   const store = new Workspace(workspaceDir);
@@ -62,7 +67,7 @@ async function bootstrap({ authority = { operations: ["read", "write"], targetPr
     { type: "relationship.add", value: rel("cb-evaluator", "CB1", "evaluator", "EV-UNIT", "unit") },
     { type: "evidence.create", value: {
       id: "EV-BASE", kind: "evidence", ...env({ origin: "extractor", epistemic_basis: "observed" }),
-      stateRef, edges, extractionScope: { fromPrefixes: ["src/"] },
+      stateRef, edges: scopedEdges, extractionScope: { fromPrefixes: ["src/"] },
     } },
     { type: "commitment.create", value: commitment("EP-PURPOSE", "add a domain service") },
     { type: "commitment.create", value: commitment("EP-BASE", "base state") },
@@ -256,6 +261,60 @@ test("closure refuses an episode in which a base file was deleted outside admiss
     assert.equal(closed.isError, true);
     assert.ok(closed.text.includes("UNCONTROLLED_EFFECT"));
     assert.ok(closed.text.includes("src/domain/a.ts"));
+  } finally {
+    await rm(repoDir, { recursive: true, force: true });
+    await rm(workspaceDir, { recursive: true, force: true });
+  }
+});
+
+test("closure evidence edges obey the record's declared extractionScope", async () => {
+  const { repoDir, workspaceDir, server } = await bootstrap({ testFixture: true });
+  try {
+    const write = server.tools.find((tool) => tool.name === "kraddle_write_file");
+    const written = await write.handler({ path: "src/domain/service.ts", content: "export const service = () => 1;\n" });
+    assert.ok(!written.isError);
+
+    const close = server.tools.find((tool) => tool.name === "kraddle_close_episode");
+    const closed = await close.handler({});
+    assert.ok(!closed.isError, closed?.text);
+
+    const reloaded = new Workspace(workspaceDir);
+    const loadResult = await reloaded.load();
+    assert.equal(loadResult.trusted, true);
+    const worktreeEvidence = [...loadResult.state.evidence.values()].find(
+      (record) => record.stateRef?.revision?.endsWith("+worktree"),
+    );
+    assert.ok(worktreeEvidence);
+    assert.deepEqual(worktreeEvidence.extractionScope, { fromPrefixes: ["src/"] });
+    assert.ok(worktreeEvidence.edges.length > 0);
+    for (const edge of worktreeEvidence.edges) {
+      assert.ok(
+        edge.from.startsWith("src/"),
+        `closure evidence edge outside declared scope: ${JSON.stringify(edge)}`,
+      );
+    }
+  } finally {
+    await rm(repoDir, { recursive: true, force: true });
+    await rm(workspaceDir, { recursive: true, force: true });
+  }
+});
+
+test("closure denies on resolver incompleteness, same as preflight", async () => {
+  const { repoDir, workspaceDir, server } = await bootstrap();
+  try {
+    const write = server.tools.find((tool) => tool.name === "kraddle_write_file");
+    const written = await write.handler({ path: "src/domain/service.ts", content: "export const service = () => 1;\n" });
+    assert.ok(!written.isError);
+
+    const selector = server.state.commitments.get("S1");
+    await server.workspace.transact([
+      { type: "commitment.update", value: { ...selector, value: { type: "semantic_similarity", value: "auth-ish" } } },
+    ]);
+
+    const close = server.tools.find((tool) => tool.name === "kraddle_close_episode");
+    const closed = await close.handler({});
+    assert.equal(closed.isError, true);
+    assert.ok(closed.text.includes("CONTEXT_INCOMPLETE"));
   } finally {
     await rm(repoDir, { recursive: true, force: true });
     await rm(workspaceDir, { recursive: true, force: true });
