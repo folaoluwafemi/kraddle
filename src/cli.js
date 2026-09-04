@@ -291,7 +291,7 @@ async function commandEpisodeStart({ flags }) {
       ``,
       `Paste these to run the MCP server (npm start):`,
       `KRADDLE_REPO=${repo}`,
-      `KRADDLE_WORKSPACE_DIR=${repo.replace(/[\\/]$/, "")}${sep}.kraddle`,
+      `KRADDLE_WORKSPACE_DIR=${repo.replace(/[\\/]$/, "")}`,
       `KRADDLE_EPISODE_ID=${episodeId}`,
       `KRADDLE_BASE_EVIDENCE_ID=${evidenceId}`,
     ].join("\n"),

@@ -36,6 +36,51 @@ Maturity labels used throughout the project:
 | **Implemented** | Working software exists |
 | **Verified** | Conformance tests establish the implementation's behavior |
 
+## Quickstart (local, hand-installed)
+
+Requirements: Node >= 20, git on PATH. No dependencies to install.
+
+1. Clone the repository and run `npm install` (there are no runtime dependencies; this only satisfies tooling expectations).
+
+2. Create a workspace for your repository:
+
+   ```sh
+   node src/cli.js init
+   ```
+
+   This creates `.kraddle/` in the current directory (run it from your repo root, or pass `--repo <dir>`).
+
+3. Declare one rule, in your own words:
+
+   ```sh
+   node src/cli.js rule add --source src/domain --forbid src/ui \
+     --text "domain must not import ui"
+   ```
+
+   The rule is pinned to your current git revision and to the dependency evidence extracted at that revision.
+
+4. Launch an episode for your agent:
+
+   ```sh
+   node src/cli.js episode start --task "add a small domain service" \
+     --write-prefix src/domain
+   ```
+
+   The command prints four environment variables. Paste them and start the MCP server:
+
+   ```sh
+   npm start
+   ```
+
+5. Point any MCP client at the server over stdio. The agent sees exactly three tools: read a file, write a file, request episode closure.
+
+6. What you should see:
+   - The agent reads and writes through those three tools and nothing else.
+   - A write that would violate your rule is **denied, with your rule text quoted**, and the file is never written.
+   - If the agent changes files outside the tool (directly on disk), closing the episode is **refused** and the changed paths are named.
+
+What Kraddle is *not* doing here: there is no sandbox and no enforced perimeter. An agent can still write files directly; Kraddle denies admission for violating writes, refuses to record unadmitted changes as controlled execution, and offers no tool that can weaken the governing rule. It detects and refuses — it does not prevent. See the maturity table above for what is verified versus specified.
+
 ## The Problem
 
 As software and agent activity grow, neither humans nor models can continuously hold all relevant context. Ordinary abstractions help by hiding detail, but each abstraction makes a wager:
