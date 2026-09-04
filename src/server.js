@@ -17,7 +17,7 @@ import {
   resolveApplicableContext,
   validateEpisodeClosure,
 } from "./kernel.js";
-import { readRepoFiles } from "./repo.js";
+import { readRepoFiles, readWorktreeFiles } from "./repo.js";
 
 const SERVER_INFO = { name: "kraddle-agent-surface", version: "0.1.0" };
 
@@ -112,6 +112,7 @@ export async function createKraddleServer({ repoDir, workspaceDir, episodeId, ba
       actual: baseDigest,
     });
   }
+  const worktreeBase = Object.freeze({ ...(await readWorktreeFiles(repoDir)).files });
 
   const admittedWrites = new Map();
   const baseRevision = episode.baseStateRef.revision;
@@ -210,15 +211,16 @@ export async function createKraddleServer({ repoDir, workspaceDir, episodeId, ba
       inputSchema: { type: "object", properties: {} },
       handler: asToolResult(async () => {
         requireTrustedProjection(workspace);
-        const { files: currentFiles } = await readRepoFiles(repoDir);
-        const expectedFiles = { ...baseFiles, ...Object.fromEntries(admittedWrites) };
-        const allPaths = new Set([...Object.keys(expectedFiles), ...Object.keys(currentFiles)]);
+        const current = await readWorktreeFiles(repoDir);
+        const expectedFiles = { ...worktreeBase, ...Object.fromEntries(admittedWrites) };
+        const allPaths = new Set([...Object.keys(expectedFiles), ...Object.keys(current.files)]);
         const unadmitted = [...allPaths]
-          .filter((path) => expectedFiles[path] !== currentFiles[path])
+          .filter((path) => expectedFiles[path] !== current.files[path])
           .sort();
         if (unadmitted.length) {
           throw new ControlDenial(DENIAL.UNCONTROLLED_EFFECT, { episodeId, paths: unadmitted });
         }
+        const currentFiles = current.files;
 
         const baseRef = workspace.state.units.get(episodeId).baseStateRef;
         const worktreeStateRef = {

@@ -9,7 +9,7 @@ import { computeFileMapDigest, extractDependencies } from "../src/extract.js";
 import { Workspace } from "../src/kernel.js";
 import { gitStateRef, readRepoFiles } from "../src/repo.js";
 import { createKraddleServer } from "../src/server.js";
-import { writeFile as fsWriteFile } from "node:fs/promises";
+import { rm as fsRm, writeFile as fsWriteFile } from "node:fs/promises";
 
 const exec = promisify(execFile);
 
@@ -216,6 +216,46 @@ test("closure refuses an episode whose working tree contains an unadmitted chang
     assert.equal(closed.isError, true);
     assert.ok(closed.text.includes("UNCONTROLLED_EFFECT"));
     assert.ok(closed.text.includes("src/domain/rogue.ts"));
+  } finally {
+    await rm(repoDir, { recursive: true, force: true });
+    await rm(workspaceDir, { recursive: true, force: true });
+  }
+});
+
+test("closure refuses an episode whose package.json was edited outside admission", async () => {
+  const { repoDir, workspaceDir, server } = await bootstrap();
+  try {
+    const write = server.tools.find((tool) => tool.name === "kraddle_write_file");
+    const written = await write.handler({ path: "src/domain/service.ts", content: "export const service = () => 1;\n" });
+    assert.ok(!written.isError);
+
+    await fsWriteFile(join(repoDir, "package.json"), '{\n  "name": "weakened"\n}\n', "utf8");
+
+    const close = server.tools.find((tool) => tool.name === "kraddle_close_episode");
+    const closed = await close.handler({});
+    assert.equal(closed.isError, true);
+    assert.ok(closed.text.includes("UNCONTROLLED_EFFECT"));
+    assert.ok(closed.text.includes("package.json"));
+  } finally {
+    await rm(repoDir, { recursive: true, force: true });
+    await rm(workspaceDir, { recursive: true, force: true });
+  }
+});
+
+test("closure refuses an episode in which a base file was deleted outside admission", async () => {
+  const { repoDir, workspaceDir, server } = await bootstrap();
+  try {
+    const write = server.tools.find((tool) => tool.name === "kraddle_write_file");
+    const written = await write.handler({ path: "src/domain/service.ts", content: "export const service = () => 1;\n" });
+    assert.ok(!written.isError);
+
+    await fsRm(join(repoDir, "src", "domain", "a.ts"));
+
+    const close = server.tools.find((tool) => tool.name === "kraddle_close_episode");
+    const closed = await close.handler({});
+    assert.equal(closed.isError, true);
+    assert.ok(closed.text.includes("UNCONTROLLED_EFFECT"));
+    assert.ok(closed.text.includes("src/domain/a.ts"));
   } finally {
     await rm(repoDir, { recursive: true, force: true });
     await rm(workspaceDir, { recursive: true, force: true });
