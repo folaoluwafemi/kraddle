@@ -6,6 +6,9 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { test } from "node:test";
 import { runCli } from "../src/cli.js";
+import { validateProfile, Workspace } from "../src/kernel.js";
+import { readRepoFiles } from "../src/repo.js";
+import { extractDependencies } from "../src/extract.js";
 
 const exec = promisify(execFile);
 
@@ -45,6 +48,84 @@ test("init twice is refused with WORKSPACE_EXISTS", async () => {
     assert.equal(second.code, 1);
     assert.ok(second.output.includes("WORKSPACE_EXISTS"));
     assert.ok(!/    at /.test(second.output), "no stack frames in CLI failure output");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("rule add declares a governing rule pinned to HEAD and scoped", async () => {
+  const root = await tempRepo();
+  try {
+    await runCli(["init", "--repo", root]);
+    const result = await runCli([
+      "rule", "add", "--repo", root,
+      "--source", "src/domain", "--forbid", "src/ui",
+      "--text", "domain must not import ui",
+    ]);
+    assert.equal(result.code, 0, result.output);
+    const bindingMatch = result.output.match(/binding\s+(\S+)/);
+    const evidenceMatch = result.output.match(/evidence\s+(\S+)/);
+    assert.ok(bindingMatch, `output names the binding id: ${result.output}`);
+    assert.ok(evidenceMatch, `output names the evidence id: ${result.output}`);
+    assert.ok(result.output.includes("rev"), "output mentions the pinned revision");
+
+    const store = new Workspace(root);
+    await store.load();
+    const bindingId = bindingMatch[1];
+    const summary = validateProfile(store.state, bindingId);
+    assert.equal(summary.kind, "control_binding");
+    const evidence = store.state.evidence.get(evidenceMatch[1]);
+    const { stdout } = await exec("git", ["rev-parse", "HEAD"], { cwd: root });
+    assert.equal(evidence.stateRef.revision, stdout.trim());
+    const { files } = await readRepoFiles(root);
+    const { edges } = extractDependencies(files);
+    const scoped = edges.filter((edge) => edge.from.startsWith("src/domain/"));
+    assert.equal(evidence.edges.length, scoped.length);
+    assert.deepEqual(evidence.extractionScope, { fromPrefixes: ["src/domain/"] });
+    const governed = [...store.state.commitments.values()].find(
+      (commitment) => commitment.value === "domain must not import ui",
+    );
+    assert.ok(governed);
+    assert.deepEqual(governed.forbiddenPathPrefixes, ["src/ui/"]);
+    const evaluator = [...store.state.units.values()].find(
+      (unit) => unit.kind === "evaluator" && unit.evaluatorType === "architecture_rule",
+    );
+    assert.ok(evaluator);
+    assert.equal(evaluator.params.sourcePrefix, "src/domain/");
+    assert.deepEqual(evaluator.params.forbiddenPrefixes, ["src/ui/"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("rule add refuses an unsatisfiable rule", async () => {
+  const root = await tempRepo();
+  try {
+    await runCli(["init", "--repo", root]);
+    const result = await runCli([
+      "rule", "add", "--repo", root,
+      "--source", "src", "--forbid", "src",
+      "--text", "src must not import src",
+    ]);
+    assert.equal(result.code, 1);
+    assert.ok(result.output.includes("unsatisfiable"), result.output);
+    assert.ok(!/    at /.test(result.output));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("rule add requires --text", async () => {
+  const root = await tempRepo();
+  try {
+    await runCli(["init", "--repo", root]);
+    const result = await runCli([
+      "rule", "add", "--repo", root,
+      "--source", "src/domain", "--forbid", "src/ui",
+    ]);
+    assert.equal(result.code, 1);
+    assert.ok(result.output.includes("usage"), result.output);
+    assert.ok(!/    at /.test(result.output));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
