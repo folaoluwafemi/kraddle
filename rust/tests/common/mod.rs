@@ -1,6 +1,6 @@
 //! Shared helpers for the ported Node test fixtures.
 
-use kraddle::kernel::{empty_state, DenialCode, KraddleError, Record, State};
+use kraddle::kernel::{empty_state, DenialCode, KraddleError, Record, State, TransactOptions, Workspace};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
@@ -249,4 +249,168 @@ pub fn evidence_record(id: &str, over: &[(&str, Value)]) -> Record {
         record.set_field(key, value.clone());
     }
     record
+}
+
+// ---------------------------------------------------------------------------
+// Server-test bootstrap (port of test/server.test.js's bootstrap): a temp
+// git repo with fixture files and a separately-rooted workspace holding a
+// human-transacted binding, base evidence, and a running episode.
+
+pub struct ServerFixture {
+    pub _temp: TempDir,
+    pub repo_dir: std::path::PathBuf,
+    pub ws_dir: std::path::PathBuf,
+    pub files: std::collections::BTreeMap<String, String>,
+    pub state_ref: Value,
+    pub server: kraddle::server::KraddleServer,
+}
+
+pub fn server_bootstrap(
+    authority_over: &[(&str, Value)],
+    test_fixture: bool,
+) -> ServerFixture {
+    server_bootstrap_with(authority_over, test_fixture, None)
+}
+
+pub fn server_bootstrap_with(
+    authority_over: &[(&str, Value)],
+    test_fixture: bool,
+    authority_override: Option<Value>,
+) -> ServerFixture {
+    use kraddle::server::{create_kraddle_server, ServerConfig};
+
+    let temp = TempDir::new("kraddle-server");
+    let repo_dir = temp.path().join("repo");
+    let ws_dir = temp.path().join("ws");
+    for dir in ["src/domain", "src/ui"] {
+        std::fs::create_dir_all(repo_dir.join(dir)).unwrap();
+    }
+    std::fs::write(repo_dir.join("src/domain/a.ts"), "export const a = 1;\n").unwrap();
+    std::fs::write(repo_dir.join("src/ui/Button.tsx"), "import React from \"react\";\n").unwrap();
+    if test_fixture {
+        std::fs::create_dir_all(repo_dir.join("test")).unwrap();
+        std::fs::write(repo_dir.join("test/fixture.test.js"), "import { thing } from \"./missing\";\n").unwrap();
+    }
+    let run = |args: &[&str]| {
+        let status = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&repo_dir)
+            .status()
+            .expect("git runs");
+        assert!(status.success(), "git {:?} failed", args);
+    };
+    run(&["init"]);
+    run(&["config", "user.email", "test@example.com"]);
+    run(&["config", "user.name", "Test"]);
+    run(&["add", "src/domain/a.ts", "src/ui/Button.tsx"]);
+    if test_fixture {
+        run(&["add", "test/fixture.test.js"]);
+    }
+    run(&["commit", "-m", "init"]);
+
+    let files = kraddle::repo::read_repo_files(&repo_dir).unwrap().files;
+    let git = kraddle::repo::git_state_ref(&repo_dir).unwrap();
+    let state_ref = json!({
+        "repository": git.repository,
+        "revision": git.revision,
+        "contentDigest": kraddle::extract::compute_file_map_digest(&files),
+    });
+    let edges = kraddle::extract::extract_dependencies(&files).edges;
+    let scoped_edges: Vec<Value> = edges
+        .iter()
+        .filter(|edge| {
+            edge.get("from")
+                .and_then(|f| f.as_str())
+                .map(|from| from.starts_with("src/"))
+                .unwrap_or(false)
+        })
+        .cloned()
+        .collect();
+
+    let store = Workspace::new(&ws_dir);
+    store.init().expect("init");
+
+    let authority = match authority_override {
+        Some(value) => value,
+        None => {
+            let mut authority = json!({ "operations": ["read", "write"], "targetPrefix": "src/domain/" });
+            if let Some(map) = authority.as_object_mut() {
+                for (key, value) in authority_over {
+                    map.insert(key.to_string(), value.clone());
+                }
+            }
+            authority
+        }
+    };
+
+    let mut authority_record = Record::human("EP-AUTH", "authority_grant");
+    if let Some(map) = authority.as_object() {
+        for (key, value) in map {
+            authority_record.set_field(key, value.clone());
+        }
+    }
+
+    let mut evidence = Record::human("EV-BASE", "evidence");
+    evidence.origin = "extractor".into();
+    evidence.epistemic_basis = "observed".into();
+    evidence.set_field("stateRef", state_ref.clone());
+    evidence.set_field("edges", json!(scoped_edges));
+    evidence.set_field("extractionScope", json!({ "fromPrefixes": ["src/"] }));
+
+    let ctx = Record::human("EP-CTX", "context_envelope")
+        .with("valid", json!(true))
+        .with("completeness", json!("complete"))
+        .with("complete", json!(true))
+        .with("incompleteReasons", json!([]));
+    let mut episode = Record::human("EP1", "execution_episode")
+        .with("lifecycle", json!("running"));
+    episode.set_field("baseStateRef", state_ref.clone());
+    let evaluator_unit = Record::human("EV-UNIT", "evaluator")
+        .with("evaluatorType", json!("architecture_rule"))
+        .with("params", json!({ "sourcePrefix": "src/domain/", "forbiddenPrefixes": ["src/ui/"] }));
+
+    let mut ops = vec![
+        op("scope.create", &Record::human("SC1", "scope")),
+        op("unit.create", &evaluator_unit),
+        op("commitment.create", &commitment("C1", "domain must not import ui")),
+        op("commitment.create", &Record::human("S1", "commitment").with("value", json!({ "type": "path_prefix", "value": "src/domain/" }))),
+        op("commitment.create", &commitment("M1", "prohibition").with("type", json!("has_modality"))),
+        op("unit.create", &Record::human("CB1", "control_binding")),
+        op("relationship.add", &rel("cb-governed", "CB1", "governed_commitment", "C1", "commitment")),
+        op("relationship.add", &rel("cb-selector", "CB1", "subject_selector", "S1", "commitment")),
+        op("relationship.add", &rel("cb-modality", "CB1", "modality", "M1", "commitment")),
+        op("relationship.add", &rel("cb-evaluator", "CB1", "evaluator", "EV-UNIT", "unit")),
+        op("evidence.create", &evidence),
+        op("commitment.create", &commitment("EP-PURPOSE", "add a domain service")),
+        op("commitment.create", &commitment("EP-BASE", "base state")),
+        op("commitment.create", &commitment("EP-OUTCOME", "service added under the governing control")),
+        op("unit.create", &ctx),
+        op("unit.create", &authority_record),
+        op("unit.create", &Record::human("EP-DELTA", "software_element")),
+        op("unit.create", &episode),
+        op("relationship.add", &rel("ep-purpose", "EP1", "purpose", "EP-PURPOSE", "commitment")),
+        op("relationship.add", &rel("ep-scope", "EP1", "target_scope", "SC1", "scope")),
+        op("relationship.add", &rel("ep-base", "EP1", "base_revision", "EP-BASE", "commitment")),
+        op("relationship.add", &rel("ep-context", "EP1", "context_envelope", "EP-CTX", "unit")),
+        op("relationship.add", &rel("ep-authority", "EP1", "authority_grant", "EP-AUTH", "unit")),
+        op("relationship.add", &rel("ep-delta", "EP1", "intended_delta", "EP-DELTA", "unit")),
+        op("relationship.add", &rel("ep-outcome", "EP1", "outcome", "EP-OUTCOME", "commitment")),
+    ];
+    let _ = &mut ops;
+    store
+        .transact(
+            &ops,
+            &TransactOptions { profile_ids: vec!["CB1".into(), "EP1".into()], ..Default::default() },
+        )
+        .expect("bootstrap transact");
+
+    let server = create_kraddle_server(&ServerConfig {
+        repo_dir: repo_dir.clone(),
+        workspace_dir: ws_dir.clone(),
+        episode_id: "EP1".into(),
+        base_evidence_id: "EV-BASE".into(),
+    })
+    .expect("server boots");
+
+    ServerFixture { _temp: temp, repo_dir, ws_dir, files, state_ref, server }
 }
