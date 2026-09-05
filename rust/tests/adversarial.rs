@@ -4,11 +4,14 @@
 
 mod common;
 
-use common::{episode_fixture_operations, episode_state, expect_control, rel, unit, TempDir};
-use kraddle::kernel::{
-    admit_effect, episode_status, DenialCode, Effect, Record, TransactOptions, Workspace,
+use common::{
+    closure_state, episode_fixture_operations, episode_state, expect_control, rel, unit, TempDir,
 };
-use serde_json::json;
+use kraddle::kernel::{
+    admit_effect, classify_effect, episode_status, record_observed_effect, validate_episode_closure,
+    DenialCode, Effect, Record, TransactOptions, Workspace,
+};
+use serde_json::{json, Value};
 use std::path::Path;
 
 use std::thread::sleep;
@@ -219,6 +222,149 @@ fn ad02_an_agent_cannot_mutate_its_own_governing_control() {
     let updated = store.state().commitments.get("C2").unwrap().clone();
     assert_eq!(updated.str_field("title"), Some("renamed by agent"));
     assert_ne!(updated.approval_state, "accepted");
+}
+
+#[test]
+fn ad05_a_base_revision_evaluation_cannot_close_a_later_revision() {
+    let mut mismatched = closure_state(
+        &[],
+        &[("stateRef", json!({ "repository": "repo", "revision": "rev-a", "contentDigest": "digest-a" }))],
+        "satisfied",
+    );
+    admit_effect(&mut mismatched, "EP1", &Effect { operation: "write".into(), target: Some("src/domain/a.ts".into()) }).expect("admit");
+    let err = expect_control(validate_episode_closure(&mismatched, "EP1"), DenialCode::EvaluationRevisionMismatch);
+    assert_eq!(err.detail().get("evaluated"), Some(&json!("rev-a")));
+    assert_eq!(err.detail().get("required"), Some(&json!("rev-b")));
+
+    let mut digest_mismatch = closure_state(
+        &[],
+        &[("stateRef", json!({ "repository": "repo", "revision": "rev-b", "contentDigest": "digest-x" }))],
+        "satisfied",
+    );
+    admit_effect(&mut digest_mismatch, "EP1", &Effect { operation: "write".into(), target: Some("src/domain/a.ts".into()) }).expect("admit");
+    let err = expect_control(validate_episode_closure(&digest_mismatch, "EP1"), DenialCode::EvaluationRevisionMismatch);
+    assert_eq!(err.detail().get("fields"), Some(&json!(["contentDigest"])));
+
+    let mut matched = closure_state(&[], &[], "satisfied");
+    admit_effect(&mut matched, "EP1", &Effect { operation: "write".into(), target: Some("src/domain/a.ts".into()) }).expect("admit");
+    assert_eq!(
+        validate_episode_closure(&matched, "EP1").unwrap(),
+        json!({ "closable": true, "episodeId": "EP1" })
+    );
+}
+
+#[test]
+fn an_episode_without_effects_must_explicitly_declare_no_op() {
+    let state = closure_state(&[], &[], "satisfied");
+    expect_control(validate_episode_closure(&state, "EP1"), DenialCode::NoOpNotDeclared);
+}
+
+#[test]
+fn a_declared_no_op_episode_with_a_satisfied_obligation_closes() {
+    let state = closure_state(&[("noOp", json!(true))], &[], "satisfied");
+    assert_eq!(
+        validate_episode_closure(&state, "EP1").unwrap(),
+        json!({ "closable": true, "episodeId": "EP1" })
+    );
+}
+
+#[test]
+fn ad10_effects_cannot_be_documented_after_bypassing_admission() {
+    let mut unadmitted = closure_state(&[], &[], "satisfied");
+    let observation = record_observed_effect(&mut unadmitted, "EP1", &json!({
+        "operation": "write",
+        "target": "src/domain/a.ts",
+        "admissionId": Value::Null,
+    }))
+    .expect("record");
+    let classification = classify_effect(&unadmitted, "EP1", &observation);
+    assert_eq!(classification.get("controlled"), Some(&json!(false)));
+    expect_control(validate_episode_closure(&unadmitted, "EP1"), DenialCode::UncontrolledEffect);
+    let observed_list = unadmitted
+        .units
+        .get("EP1")
+        .unwrap()
+        .field("observedEffects")
+        .and_then(|f| f.as_array())
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(observed_list.len(), 1);
+
+    let mut forged = closure_state(&[], &[], "satisfied");
+    let forged_observation = record_observed_effect(&mut forged, "EP1", &json!({
+        "operation": "write",
+        "target": "src/domain/a.ts",
+        "admissionId": "not-a-real-admission",
+    }))
+    .expect("record");
+    assert_eq!(classify_effect(&forged, "EP1", &forged_observation).get("controlled"), Some(&json!(false)));
+    expect_control(validate_episode_closure(&forged, "EP1"), DenialCode::UncontrolledEffect);
+
+    let mut controlled = closure_state(&[], &[], "satisfied");
+    let admission = admit_effect(
+        &mut controlled,
+        "EP1",
+        &Effect { operation: "write".into(), target: Some("src/domain/a.ts".into()) },
+    )
+    .expect("admit");
+    assert!(admission.admitted);
+    record_observed_effect(&mut controlled, "EP1", &json!({
+        "operation": "write",
+        "target": "src/domain/a.ts",
+        "admissionId": admission.admission_id,
+    }))
+    .expect("record");
+    assert_eq!(
+        validate_episode_closure(&controlled, "EP1").unwrap(),
+        json!({ "closable": true, "episodeId": "EP1" })
+    );
+}
+
+#[test]
+fn an_observed_effect_must_match_its_admission() {
+    let mut state = closure_state(&[], &[], "satisfied");
+    let admission = admit_effect(
+        &mut state,
+        "EP1",
+        &Effect { operation: "write".into(), target: Some("src/domain/a.ts".into()) },
+    )
+    .expect("admit");
+    let observation = record_observed_effect(&mut state, "EP1", &json!({
+        "operation": "delete",
+        "target": "src/other/secrets.txt",
+        "admissionId": admission.admission_id,
+    }))
+    .expect("record");
+    let classification = classify_effect(&state, "EP1", &observation);
+    assert_eq!(classification.get("controlled"), Some(&json!(false)));
+    assert_eq!(classification.get("reason"), Some(&json!("effect_mismatch")));
+    expect_control(validate_episode_closure(&state, "EP1"), DenialCode::UncontrolledEffect);
+}
+
+#[test]
+fn a_matching_observed_effect_is_controlled() {
+    let mut state = closure_state(&[], &[], "satisfied");
+    let admission = admit_effect(
+        &mut state,
+        "EP1",
+        &Effect { operation: "write".into(), target: Some("src/domain/a.ts".into()) },
+    )
+    .expect("admit");
+    record_observed_effect(&mut state, "EP1", &json!({
+        "operation": "write",
+        "target": "src/domain/a.ts",
+        "admissionId": admission.admission_id,
+    }))
+    .expect("record");
+    assert_eq!(classify_effect(&state, "EP1", &json!({
+        "operation": "write",
+        "target": "src/domain/a.ts",
+        "admissionId": admission.admission_id,
+    })), json!({ "controlled": true }));
+    assert_eq!(
+        validate_episode_closure(&state, "EP1").unwrap(),
+        json!({ "closable": true, "episodeId": "EP1" })
+    );
 }
 
 #[test]

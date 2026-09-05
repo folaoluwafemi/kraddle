@@ -5,7 +5,8 @@ mod common;
 
 use common::{commitment, episode_state, expect_control, op, rel, TempDir, unit};
 use kraddle::kernel::{
-    admit_effect, empty_state, DenialCode, Effect, State, TransactOptions, Workspace, validate_profile,
+    admit_effect, empty_state, validate_episode_closure, DenialCode, Effect, State,
+    TransactOptions, Workspace, validate_profile,
 };
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -176,6 +177,12 @@ fn denies_effects_outside_an_episode_authority_envelope() {
         admit_effect(&mut state, "EP1", &Effect { operation: "execute".into(), target: Some("src/research/run.js".into()) }),
         DenialCode::OperationNotAuthorized,
     );
+}
+
+#[test]
+fn does_not_close_an_episode_without_an_outcome() {
+    let state = episode_state(&[("operations", json!(["write"]))], &[], &[]);
+    expect_control(validate_episode_closure(&state, "EP1"), DenialCode::EpisodeOutcomeMissing);
 }
 
 #[test]

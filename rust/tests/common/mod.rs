@@ -122,3 +122,79 @@ pub fn episode_fixture_operations(authority: &[(&str, Value)], episode: &[(&str,
     }
     ops
 }
+
+/// Port of the adversarial suite's coverageObject fixture helper.
+pub fn coverage_object() -> Value {
+    let coverage = json!({
+        "requiredSubjects": ["src/domain/a.ts"],
+        "coveredSubjects": ["src/domain/a.ts"],
+        "unknownSubjects": [],
+        "excludedSubjects": [],
+        "selectionMethod": "changed_files",
+    });
+    let digest = kraddle::kernel::compute_coverage_digest(&coverage).expect("coverage digest");
+    let mut with_digest = coverage;
+    if let Some(map) = with_digest.as_object_mut() {
+        map.insert("coverageDigest".into(), json!(digest));
+    }
+    with_digest
+}
+
+/// Port of the adversarial suite's closureState fixture: EP1 with base and
+/// resulting state refs, outcome, and a proof-obligation evaluation EV1.
+pub fn closure_state(
+    episode: &[(&str, Value)],
+    evaluation: &[(&str, Value)],
+    result_value: &str,
+) -> State {
+    let mut state = empty_state();
+    let mut ep = Record::human("EP1", "execution_episode")
+        .with("lifecycle", json!("running"))
+        .with("baseStateRef", json!({ "repository": "repo", "revision": "rev-a", "contentDigest": "digest-a" }))
+        .with("resultingStateRef", json!({ "repository": "repo", "revision": "rev-b", "contentDigest": "digest-b" }));
+    for (key, value) in episode {
+        ep = ep.with(key, value.clone());
+    }
+    state.units.insert("EP1".into(), ep);
+
+    let mut ev = Record::human("EV1", "evaluation")
+        .with("stateRef", json!({ "repository": "repo", "revision": "rev-b", "contentDigest": "digest-b" }))
+        .with("coverage", coverage_object());
+    for (key, value) in evaluation {
+        ev = ev.with(key, value.clone());
+    }
+    state.units.insert("EV1".into(), ev);
+
+    state.commitments.insert("purpose-c".into(), commitment("purpose-c", "do work"));
+    state.scopes.insert("scope-r".into(), Record::human("scope-r", "scope"));
+    state.commitments.insert("base-c".into(), commitment("base-c", "revision-a"));
+    state.units.insert("context-u".into(), Record::human("context-u", "context_envelope").with("valid", json!(true)).with("completeness", json!("complete")));
+    state.units.insert("authority-u".into(), Record::human("authority-u", "authority_grant").with("operations", json!(["write"])));
+    state.units.insert("delta-u".into(), Record::human("delta-u", "software_element"));
+    state.commitments.insert("outcome-c".into(), commitment("outcome-c", "work complete"));
+    state.commitments.insert("target-c".into(), commitment("target-c", "domain must not import ui"));
+    state.units.insert("selector-u".into(), unit("selector-u", "selector"));
+    state.units.insert("evaluator-u".into(), unit("evaluator-u", "evaluator"));
+    state.commitments.insert("result-c".into(), commitment("result-c", result_value));
+    state.commitments.insert("coverage-c".into(), commitment("coverage-c", "complete"));
+
+    for (id, profile_id, role, target_id, target_type) in [
+        ("ep-purpose", "EP1", "purpose", "purpose-c", "commitment"),
+        ("ep-scope", "EP1", "target_scope", "scope-r", "scope"),
+        ("ep-base", "EP1", "base_revision", "base-c", "commitment"),
+        ("ep-context", "EP1", "context_envelope", "context-u", "unit"),
+        ("ep-authority", "EP1", "authority_grant", "authority-u", "unit"),
+        ("ep-delta", "EP1", "intended_delta", "delta-u", "unit"),
+        ("ep-outcome", "EP1", "outcome", "outcome-c", "commitment"),
+        ("ep-proof", "EP1", "proof_obligation", "EV1", "unit"),
+        ("ev-target", "EV1", "target_commitment", "target-c", "commitment"),
+        ("ev-selector", "EV1", "target_selector", "selector-u", "unit"),
+        ("ev-scope", "EV1", "source_scope", "scope-r", "scope"),
+        ("ev-evaluator", "EV1", "evaluator", "evaluator-u", "unit"),
+        ("ev-result", "EV1", "result", "result-c", "commitment"),
+        ("ev-coverage", "EV1", "coverage", "coverage-c", "commitment"),
+    ] {
+        state.relationships.insert(id.into(), rel(id, profile_id, role, target_id, target_type));
+    }
+    state
+}

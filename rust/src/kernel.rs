@@ -1290,3 +1290,276 @@ pub fn authorize_mutation(state: &State, request: &MutationRequest) -> KResult<V
         json!({ "actorId": request.actor_id, "targetId": request.target_id, "episodeId": request.episode_id, "type": op_type }),
     ))
 }
+
+// ---------------------------------------------------------------------------
+// State references and coverage
+
+/// Port of validateStateReference.
+pub fn validate_state_reference(reference: &Value) -> KResult<()> {
+    for field in ["repository", "revision", "contentDigest"] {
+        let value = reference.get(field).and_then(|v| v.as_str()).unwrap_or("");
+        if value.is_empty() {
+            return Err(KraddleError::control(DenialCode::EnvelopeInvalid, json!({ "field": field })));
+        }
+    }
+    Ok(())
+}
+
+const SUBJECT_FIELDS: [&str; 4] = [
+    "requiredSubjects",
+    "coveredSubjects",
+    "unknownSubjects",
+    "excludedSubjects",
+];
+
+/// Port of normalizeSubjectSet: sorted, deduplicated, non-empty strings.
+pub fn normalize_subject_set(list: &Value) -> KResult<Vec<String>> {
+    let Some(array) = list.as_array() else {
+        return Err(KraddleError::control(
+            DenialCode::EnvelopeInvalid,
+            json!({ "reason": "subject_set_not_an_array" }),
+        ));
+    };
+    let mut seen = std::collections::BTreeSet::new();
+    for item in array {
+        let Some(text) = item.as_str() else {
+            return Err(KraddleError::control(
+                DenialCode::EnvelopeInvalid,
+                json!({ "item": item.clone() }),
+            ));
+        };
+        if text.is_empty() {
+            return Err(KraddleError::control(
+                DenialCode::EnvelopeInvalid,
+                json!({ "item": item.clone() }),
+            ));
+        }
+        seen.insert(text.to_string());
+    }
+    Ok(seen.into_iter().collect())
+}
+
+/// Port of computeCoverageDigest: sha256 over the normalized
+/// required/covered/unknown/excluded arrays, JSON-serialized in that order.
+pub fn compute_coverage_digest(coverage: &Value) -> KResult<String> {
+    let mut payload: Vec<Value> = Vec::new();
+    for field in SUBJECT_FIELDS {
+        let list = match coverage.get(field) {
+            Some(value) => value.clone(),
+            None => Value::Array(Vec::new()),
+        };
+        let normalized = normalize_subject_set(&list)?;
+        payload.push(Value::Array(
+            normalized.into_iter().map(|subject| json!(subject)).collect::<Vec<Value>>(),
+        ));
+    }
+    Ok(digest_of_value(&Value::Array(payload)))
+}
+
+/// Port of validateCoverage: digest recompute first, then unknown, then
+/// missing, then exclusions — in exactly that order.
+pub fn validate_coverage(coverage: Option<&Value>, permitted_exclusions: &[String]) -> KResult<Value> {
+    let empty = json!({});
+    let coverage = coverage.unwrap_or(&empty);
+    let mut normalized: Vec<(String, Vec<String>)> = Vec::new();
+    for field in SUBJECT_FIELDS {
+        let Some(array) = coverage.get(field).and_then(|v| v.as_array()) else {
+            return Err(KraddleError::control(DenialCode::EnvelopeInvalid, json!({ "field": field })));
+        };
+        let list = normalize_subject_set(&Value::Array(array.clone()))?;
+        normalized.push((field.to_string(), list));
+    }
+    let expected = compute_coverage_digest(coverage)?;
+    let actual = coverage.get("coverageDigest").and_then(|d| d.as_str());
+    if actual != Some(expected.as_str()) {
+        return Err(KraddleError::control(
+            DenialCode::CoverageDigestMismatch,
+            json!({ "expected": expected, "actual": coverage.get("coverageDigest").cloned().unwrap_or(Value::Null) }),
+        ));
+    }
+    let get = |field: &str| -> Vec<String> {
+        normalized
+            .iter()
+            .find(|(name, _)| name == field)
+            .map(|(_, list)| list.clone())
+            .unwrap_or_default()
+    };
+    let unknown = get("unknownSubjects");
+    if !unknown.is_empty() {
+        return Err(KraddleError::control(
+            DenialCode::CoverageUnknownNonempty,
+            json!({ "unknown": unknown }),
+        ));
+    }
+    let covered: std::collections::BTreeSet<String> = get("coveredSubjects").into_iter().collect();
+    let missing: Vec<String> = get("requiredSubjects")
+        .into_iter()
+        .filter(|subject| !covered.contains(subject))
+        .collect();
+    if !missing.is_empty() {
+        return Err(KraddleError::control(DenialCode::CoverageIncomplete, json!({ "missing": missing })));
+    }
+    let permitted: std::collections::BTreeSet<&String> = permitted_exclusions.iter().collect();
+    let not_permitted: Vec<String> = get("excludedSubjects")
+        .into_iter()
+        .filter(|subject| !permitted.contains(subject))
+        .collect();
+    if !not_permitted.is_empty() {
+        return Err(KraddleError::control(
+            DenialCode::CoverageExclusionNotPermitted,
+            json!({ "notPermitted": not_permitted }),
+        ));
+    }
+    Ok(json!({ "sufficient": true }))
+}
+
+// ---------------------------------------------------------------------------
+// Episode closure
+
+/// Port of validateEpisodeClosure: the exact check order is load-bearing —
+/// evaluation_failed, revision mismatch, not satisfied, coverage, stale.
+pub fn validate_episode_closure(state: &State, episode_id: &str) -> KResult<Value> {
+    let episode = profile_root(state, episode_id)?;
+    if episode.kind != "execution_episode" {
+        return Err(KraddleError::control(
+            DenialCode::EnvelopeInvalid,
+            json!({ "episodeId": episode_id, "kind": episode.kind, "reason": "not_execution_episode" }),
+        ));
+    }
+    validate_profile(state, episode_id)?;
+    if profile_role(state, episode_id, "outcome", "commitment").is_none() {
+        return Err(KraddleError::control(DenialCode::EpisodeOutcomeMissing, json!({ "episodeId": episode_id })));
+    }
+    if let Some(base_ref) = episode.field("baseStateRef") {
+        validate_state_reference(base_ref)?;
+    }
+    if let Some(resulting_ref) = episode.field("resultingStateRef") {
+        validate_state_reference(resulting_ref)?;
+    }
+    let admitted_effects = episode
+        .field("admittedEffects")
+        .and_then(|f| f.as_array())
+        .map(|a| !a.is_empty())
+        .unwrap_or(false);
+    let observed_effects = episode
+        .field("observedEffects")
+        .and_then(|f| f.as_array())
+        .map(|a| !a.is_empty())
+        .unwrap_or(false);
+    let has_effects = admitted_effects || observed_effects;
+    let resulting_state_ref = episode.field("resultingStateRef").cloned();
+    if has_effects && resulting_state_ref.is_none() {
+        return Err(KraddleError::control(
+            DenialCode::EvaluationRevisionMismatch,
+            json!({ "episodeId": episode_id, "reason": "resulting_state_missing" }),
+        ));
+    }
+    if !has_effects && episode.bool_field("noOp") != Some(true) {
+        return Err(KraddleError::control(DenialCode::NoOpNotDeclared, json!({ "episodeId": episode_id })));
+    }
+    for observed in episode
+        .field("observedEffects")
+        .and_then(|f| f.as_array())
+        .cloned()
+        .unwrap_or_default()
+    {
+        let classification = classify_effect(state, episode_id, &observed);
+        if classification.get("controlled") == Some(&json!(false)) {
+            return Err(KraddleError::control(
+                DenialCode::UncontrolledEffect,
+                json!({
+                    "episodeId": episode_id,
+                    "effect": observed,
+                    "reason": classification.get("reason").cloned().unwrap_or(Value::Null),
+                }),
+            ));
+        }
+    }
+
+    for obligation in relationships_for_role(state, episode_id, "proof_obligation") {
+        if obligation.str_field("targetType") != Some("unit") {
+            return Err(KraddleError::control(
+                DenialCode::EnvelopeInvalid,
+                json!({ "episodeId": episode_id, "obligationId": obligation.id, "reason": "invalid_proof_obligation" }),
+            ));
+        }
+        let target_id = obligation.str_field("targetId").unwrap_or_default();
+        let evaluation = state.units.get(target_id);
+        let valid = evaluation.map(|e| e.kind == "evaluation").unwrap_or(false);
+        if !valid {
+            return Err(KraddleError::control(
+                DenialCode::EnvelopeInvalid,
+                json!({ "episodeId": episode_id, "obligationId": obligation.id, "reason": "invalid_evaluation_obligation" }),
+            ));
+        }
+        let evaluation = evaluation.unwrap();
+        validate_profile(state, &evaluation.id)?;
+        if let Some(state_ref) = evaluation.field("stateRef") {
+            validate_state_reference(state_ref)?;
+        }
+        let result = profile_role(state, &evaluation.id, "result", "commitment");
+        let result_value = result.and_then(|r| r.str_field("value"));
+        if result_value == Some("evaluation_failed") {
+            return Err(KraddleError::control(
+                DenialCode::EvaluationFailedNotAPass,
+                json!({ "episodeId": episode_id, "evaluationId": evaluation.id }),
+            ));
+        }
+        if let Some(required) = &resulting_state_ref {
+            let reference = evaluation.field("stateRef");
+            let mut fields: Vec<&str> = Vec::new();
+            if reference
+                .and_then(|r| r.get("repository"))
+                .and_then(|v| v.as_str())
+                != required.get("repository").and_then(|v| v.as_str())
+            {
+                fields.push("repository");
+            }
+            if reference
+                .and_then(|r| r.get("revision"))
+                .and_then(|v| v.as_str())
+                != required.get("revision").and_then(|v| v.as_str())
+            {
+                fields.push("revision");
+            }
+            if reference
+                .and_then(|r| r.get("contentDigest"))
+                .and_then(|v| v.as_str())
+                != required.get("contentDigest").and_then(|v| v.as_str())
+            {
+                fields.push("contentDigest");
+            }
+            if !fields.is_empty() {
+                return Err(KraddleError::control(
+                    DenialCode::EvaluationRevisionMismatch,
+                    json!({
+                        "episodeId": episode_id,
+                        "evaluationId": evaluation.id,
+                        "fields": fields,
+                        "evaluated": reference.and_then(|r| r.get("revision").cloned()).unwrap_or(Value::Null),
+                        "required": required.get("revision").cloned().unwrap_or(Value::Null),
+                    }),
+                ));
+            }
+        }
+        if result_value != Some("satisfied") {
+            return Err(KraddleError::control(
+                DenialCode::EvaluationNotSatisfied,
+                json!({ "episodeId": episode_id, "evaluationId": evaluation.id }),
+            ));
+        }
+        let permitted: Vec<String> = episode
+            .field("permittedExclusions")
+            .and_then(|f| f.as_array())
+            .map(|list| list.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+            .unwrap_or_default();
+        validate_coverage(evaluation.field("coverage"), &permitted)?;
+        if evaluation.freshness_state == "stale" || evaluation.freshness_state == "expired" {
+            return Err(KraddleError::control(
+                DenialCode::EvaluationStale,
+                json!({ "episodeId": episode_id, "evaluationId": evaluation.id }),
+            ));
+        }
+    }
+    Ok(json!({ "closable": true, "episodeId": episode_id }))
+}
