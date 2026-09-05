@@ -786,9 +786,23 @@ impl Workspace {
                 json!({ "reason": "empty_transaction" }),
             ));
         }
-        if options.episode_id.is_some() {
-            // Mutation authorization lands with the Step 4 port
-            // (authorize_mutation), matching the Node phased build.
+        if let Some(episode_id) = &options.episode_id {
+            for operation in operations {
+                let target_id = operation
+                    .get("value")
+                    .and_then(|v| v.get("id"))
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string);
+                authorize_mutation(
+                    &inner.state,
+                    &MutationRequest {
+                        actor_id: &options.actor_id,
+                        operation,
+                        target_id: target_id.as_deref(),
+                        episode_id,
+                    },
+                )?;
+            }
         }
         if options.actor_id != "human" && !options.actor_id.starts_with("policy-") {
             for operation in operations {
@@ -1142,4 +1156,137 @@ pub fn episode_status(state: &State, episode_id: &str) -> KResult<String> {
         return Ok("suspended".into());
     }
     Ok(profile_state(episode).to_string())
+}
+
+// ---------------------------------------------------------------------------
+// Mutation authorization: default-deny, no fallback
+
+fn authority_grant_ids(state: &State, episode_id: &str) -> std::collections::BTreeSet<String> {
+    let mut ids = std::collections::BTreeSet::new();
+    for edge in relationships_for_role(state, episode_id, "authority_grant") {
+        if let Some(target_id) = edge.str_field("targetId") {
+            ids.insert(target_id.to_string());
+        }
+    }
+    let grant_ids = ids.clone();
+    for rel in state.relationships.values() {
+        if let Some(profile_id) = rel.str_field("profileId") {
+            if grant_ids.contains(profile_id) {
+                if let Some(target_id) = rel.str_field("targetId") {
+                    ids.insert(target_id.to_string());
+                }
+            }
+        }
+    }
+    ids
+}
+
+/// Port of governingRecordIds: every accepted control binding, its members
+/// (closure), and the episode's authority grant records. Over-broad is
+/// correct here; denying too much is safe.
+pub fn governing_record_ids(state: &State, episode_id: &str) -> std::collections::BTreeSet<String> {
+    let mut ids = std::collections::BTreeSet::new();
+    for unit in state.units.values() {
+        if unit.kind == "control_binding" && unit.approval_state == "accepted" {
+            ids.insert(unit.id.clone());
+        }
+    }
+    let mut grew = true;
+    while grew {
+        grew = false;
+        for edge in state.relationships.values() {
+            if let (Some(profile_id), Some(target_id)) =
+                (edge.str_field("profileId"), edge.str_field("targetId"))
+            {
+                if ids.contains(profile_id) && !ids.contains(target_id) {
+                    ids.insert(target_id.to_string());
+                    grew = true;
+                }
+            }
+        }
+    }
+    for id in authority_grant_ids(state, episode_id) {
+        ids.insert(id);
+    }
+    ids
+}
+
+pub struct MutationRequest<'a> {
+    pub actor_id: &'a str,
+    pub operation: &'a Value,
+    pub target_id: Option<&'a str>,
+    pub episode_id: &'a str,
+}
+
+/// Port of authorizeMutation: graft / authority self-amendment /
+/// self-amendment / create-allow / default-deny allowRecordIds.
+pub fn authorize_mutation(state: &State, request: &MutationRequest) -> KResult<Value> {
+    let governing = governing_record_ids(state, request.episode_id);
+    let op_type = request.operation.get("type").and_then(|v| v.as_str()).unwrap_or("");
+    let value = request.operation.get("value");
+
+    if op_type == "relationship.add" || op_type == "relationship.update" {
+        if let Some(profile_id) = value
+            .and_then(|v| v.get("profileId"))
+            .and_then(|p| p.as_str())
+        {
+            if governing.contains(profile_id) {
+                return Err(KraddleError::control(
+                    DenialCode::ProfileGraftDenied,
+                    json!({ "actorId": request.actor_id, "profileId": profile_id, "episodeId": request.episode_id }),
+                ));
+            }
+        }
+    }
+    if let Some(target_id) = request.target_id {
+        if authority_grant_ids(state, request.episode_id).contains(target_id) {
+            return Err(KraddleError::control(
+                DenialCode::AuthoritySelfAmendmentDenied,
+                json!({ "actorId": request.actor_id, "targetId": target_id, "episodeId": request.episode_id }),
+            ));
+        }
+        if governing.contains(target_id) {
+            return Err(KraddleError::control(
+                DenialCode::SelfAmendmentDenied,
+                json!({ "actorId": request.actor_id, "targetId": target_id, "episodeId": request.episode_id }),
+            ));
+        }
+    }
+    let is_create = matches!(
+        op_type,
+        "unit.create" | "commitment.create" | "relationship.add" | "evidence.create" | "scope.create"
+    );
+    if is_create {
+        return Ok(json!({ "authorized": true }));
+    }
+    let is_update = matches!(
+        op_type,
+        "unit.update"
+            | "commitment.update"
+            | "relationship.update"
+            | "evidence.update"
+            | "scope.update"
+            | "unit.tombstone"
+    );
+    if is_update {
+        let authority = profile_role(state, request.episode_id, "authority_grant", "unit");
+        let allowed: Vec<&str> = authority
+            .and_then(|a| a.field("allowRecordIds"))
+            .and_then(|f| f.as_array())
+            .map(|list| list.iter().filter_map(|v| v.as_str()).collect())
+            .unwrap_or_default();
+        if let Some(target_id) = request.target_id {
+            if allowed.contains(&target_id) {
+                return Ok(json!({ "authorized": true }));
+            }
+        }
+        return Err(KraddleError::control(
+            DenialCode::MutationNotAuthorized,
+            json!({ "actorId": request.actor_id, "targetId": request.target_id, "episodeId": request.episode_id }),
+        ));
+    }
+    Err(KraddleError::control(
+        DenialCode::MutationNotAuthorized,
+        json!({ "actorId": request.actor_id, "targetId": request.target_id, "episodeId": request.episode_id, "type": op_type }),
+    ))
 }
