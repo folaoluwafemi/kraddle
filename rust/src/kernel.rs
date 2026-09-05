@@ -438,3 +438,183 @@ enum Collection {
     Evidence,
     Scopes,
 }
+
+// ---------------------------------------------------------------------------
+// Profiles
+
+const PROFILE_KINDS: &[&str] = &["control_binding", "evaluation", "execution_episode"];
+const EVALUATION_RESULTS: &[&str] = &[
+    "satisfied",
+    "violated",
+    "unknown",
+    "not_applicable",
+    "indeterminate",
+    "evaluation_failed",
+];
+
+pub fn profile_root<'a>(state: &'a State, profile_id: &str) -> KResult<&'a Record> {
+    let root = state.units.get(profile_id);
+    let ok = root.map(|r| PROFILE_KINDS.contains(&r.kind.as_str())).unwrap_or(false);
+    if !ok {
+        return Err(KraddleError::control(
+            DenialCode::EnvelopeInvalid,
+            json!({ "profileId": profile_id, "reason": "unknown_profile_root" }),
+        ));
+    }
+    Ok(root.unwrap())
+}
+
+pub fn profile_members<'a>(state: &'a State, profile_id: &str) -> Vec<&'a Record> {
+    state
+        .relationships
+        .values()
+        .filter(|edge| edge.str_field("profileId") == Some(profile_id))
+        .collect()
+}
+
+pub fn relationships_for_role<'a>(state: &'a State, profile_id: &str, role: &str) -> Vec<&'a Record> {
+    profile_members(state, profile_id)
+        .into_iter()
+        .filter(|edge| edge.str_field("role") == Some(role))
+        .collect()
+}
+
+pub fn role_target<'a>(state: &'a State, edge: &Record) -> Option<&'a Record> {
+    let target_id = edge.str_field("targetId")?;
+    match edge.str_field("targetType")? {
+        "unit" => state.units.get(target_id),
+        "commitment" => state.commitments.get(target_id),
+        "evidence" => state.evidence.get(target_id),
+        "scope" => state.scopes.get(target_id),
+        _ => None,
+    }
+}
+
+fn require_role<'a>(state: &'a State, profile_id: &str, role: &str, target_type: &str, count: usize) -> KResult<Vec<&'a Record>> {
+    let edges = relationships_for_role(state, profile_id, role);
+    if edges.len() != count {
+        return Err(KraddleError::control(
+            DenialCode::EnvelopeInvalid,
+            json!({ "profileId": profile_id, "role": role, "expected": count, "targetType": target_type }),
+        ));
+    }
+    if edges
+        .iter()
+        .any(|edge| edge.str_field("targetType") != Some(target_type) || role_target(state, edge).is_none())
+    {
+        return Err(KraddleError::control(
+            DenialCode::EnvelopeInvalid,
+            json!({ "profileId": profile_id, "role": role, "reason": "invalid_target" }),
+        ));
+    }
+    Ok(edges)
+}
+
+fn optional_role<'a>(state: &'a State, profile_id: &str, role: &str, target_type: &str) -> KResult<Vec<&'a Record>> {
+    let edges = relationships_for_role(state, profile_id, role);
+    if edges.len() > 1 {
+        return Err(KraddleError::control(
+            DenialCode::EnvelopeInvalid,
+            json!({ "profileId": profile_id, "role": role, "expected": 1 }),
+        ));
+    }
+    if let Some(first) = edges.first() {
+        if first.str_field("targetType") != Some(target_type) || role_target(state, first).is_none() {
+            return Err(KraddleError::control(
+                DenialCode::EnvelopeInvalid,
+                json!({ "profileId": profile_id, "role": role, "reason": "invalid_target" }),
+            ));
+        }
+    }
+    Ok(edges)
+}
+
+/// Port of validateProfile. Returns { id, kind, roles }.
+pub fn validate_profile(state: &State, profile_id: &str) -> KResult<Value> {
+    let root = profile_root(state, profile_id)?;
+    let members = profile_members(state, profile_id);
+    let mut roles: Vec<String> = Vec::new();
+    for edge in &members {
+        let role = edge.str_field("role").unwrap_or("").to_string();
+        if !roles.contains(&role) {
+            roles.push(role);
+        }
+        if edge.str_field("profileId") != Some(profile_id) {
+            return Err(KraddleError::control(
+                DenialCode::EnvelopeInvalid,
+                json!({ "profileId": profile_id, "relationshipId": edge.id, "reason": "foreign_profile_member" }),
+            ));
+        }
+        if edge.str_field("role").is_none()
+            || edge.str_field("targetType").is_none()
+            || role_target(state, edge).is_none()
+        {
+            return Err(KraddleError::control(
+                DenialCode::EnvelopeInvalid,
+                json!({ "profileId": profile_id, "relationshipId": edge.id, "reason": "malformed_profile_member" }),
+            ));
+        }
+    }
+
+    match root.kind.as_str() {
+        "control_binding" => {
+            require_role(state, profile_id, "governed_commitment", "commitment", 1)?;
+            require_role(state, profile_id, "subject_selector", "commitment", 1)?;
+            require_role(state, profile_id, "modality", "commitment", 1)?;
+            optional_role(state, profile_id, "response_policy", "unit")?;
+            optional_role(state, profile_id, "authority_policy", "unit")?;
+            optional_role(state, profile_id, "evaluator", "unit")?;
+            let modality_edge = relationships_for_role(state, profile_id, "modality").remove(0);
+            let modality = role_target(state, modality_edge);
+            let modality_value = modality.and_then(|m| m.str_field("value")).unwrap_or("");
+            if ["invariant", "prohibition", "requirement"].contains(&modality_value) && !roles.iter().any(|r| r == "evaluator") {
+                return Err(KraddleError::control(
+                    DenialCode::EnvelopeInvalid,
+                    json!({ "profileId": profile_id, "modality": modality_value, "reason": "blocking_modality_requires_evaluator" }),
+                ));
+            }
+        }
+        "evaluation" => {
+            require_role(state, profile_id, "target_commitment", "commitment", 1)?;
+            require_role(state, profile_id, "target_selector", "unit", 1)?;
+            require_role(state, profile_id, "source_scope", "scope", 1)?;
+            require_role(state, profile_id, "evaluator", "unit", 1)?;
+            let result = require_role(state, profile_id, "result", "commitment", 1)?;
+            let result_value = role_target(state, result[0])
+                .and_then(|r| r.str_field("value"))
+                .unwrap_or("");
+            if !EVALUATION_RESULTS.contains(&result_value) {
+                return Err(KraddleError::control(
+                    DenialCode::EvaluationResultInvalid,
+                    json!({ "profileId": profile_id, "result": result_value }),
+                ));
+            }
+            require_role(state, profile_id, "coverage", "commitment", 1)?;
+        }
+        "execution_episode" => {
+            require_role(state, profile_id, "purpose", "commitment", 1)?;
+            require_role(state, profile_id, "target_scope", "scope", 1)?;
+            require_role(state, profile_id, "base_revision", "commitment", 1)?;
+            require_role(state, profile_id, "context_envelope", "unit", 1)?;
+            require_role(state, profile_id, "authority_grant", "unit", 1)?;
+            require_role(state, profile_id, "intended_delta", "unit", 1)?;
+            optional_role(state, profile_id, "outcome", "commitment")?;
+            optional_role(state, profile_id, "resulting_revision", "commitment")?;
+        }
+        _ => {}
+    }
+
+    Ok(json!({ "id": profile_id, "kind": root.kind, "roles": roles }))
+}
+
+pub fn profile_role<'a>(state: &'a State, profile_id: &str, role: &str, target_type: &str) -> Option<&'a Record> {
+    let relationship = relationships_for_role(state, profile_id, role).into_iter().next()?;
+    if relationship.str_field("targetType") != Some(target_type) {
+        return None;
+    }
+    role_target(state, relationship)
+}
+
+pub fn profile_state(root: &Record) -> &str {
+    root.str_field("lifecycle").unwrap_or("draft")
+}
