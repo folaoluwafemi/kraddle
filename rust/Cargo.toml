@@ -1,0 +1,20 @@
+[package]
+name = "kraddle"
+version = "0.1.0"
+edition = "2021"
+description = "Kraddle semantic control runtime (Rust port; the Node implementation is the executable specification)"
+
+[lib]
+name = "kraddle"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+# uuid is pinned: newer uuid pulls getrandom 0.4, whose raw-dylib import
+# libraries require MinGW's dlltool on the windows-gnu target (absent on
+# this machine). uuid 1.10 resolves to getrandom 0.2, which links against
+# the toolchain's self-contained MinGW import libraries instead.
+uuid = { version = "=1.10.0", features = ["v4"] }
+regex = "1"

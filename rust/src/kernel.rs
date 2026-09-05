@@ -1,0 +1,440 @@
+//! Kraddle kernel — Rust port of src/kernel.js.
+//! The Node implementation is the executable specification; when Rust and
+//! Node disagree, Rust is wrong.
+
+use serde_json::{json, Map, Value};
+use sha2::{Digest, Sha256};
+
+// ---------------------------------------------------------------------------
+// Denial codes (R7): variant names = Node's DENIAL keys; the string form is
+// byte-identical to Node's (wire compatibility).
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DenialCode {
+    EnvelopeInvalid,
+    EnvelopeEnumInvalid,
+    AcceptanceNotAuthorized,
+
+    SelfAmendmentDenied,
+    AuthoritySelfAmendmentDenied,
+    AuthorityMissingOperations,
+    AuthorityExpired,
+    AuthorityRevoked,
+
+    OperationNotAuthorized,
+    OperationForbidden,
+    TargetOutsideAuthority,
+    MutationNotAuthorized,
+    ProfileGraftDenied,
+
+    ContextIncomplete,
+    OmittedApplicableCommitment,
+    UnresolvedSelector,
+    UnresolvedDependencyEdge,
+
+    EpisodeNotActive,
+    EpisodeOutcomeMissing,
+    UncontrolledEffect,
+
+    EvaluationResultInvalid,
+    EvaluationNotSatisfied,
+    EvaluationFailedNotAPass,
+    EvaluationRevisionMismatch,
+    EvaluationStale,
+
+    CoverageIncomplete,
+    CoverageUnknownNonempty,
+    CoverageExclusionNotPermitted,
+    CoverageDigestMismatch,
+
+    SegmentDigestMismatch,
+    SegmentCommitMarkerMissing,
+    ProjectionUntrusted,
+    EvidencePinMismatch,
+    EvidenceScopeMismatch,
+    WorkspaceExists,
+    NoOpNotDeclared,
+    PreflightViolated,
+    PreflightUnknown,
+    EpisodeAlreadyActive,
+}
+
+impl DenialCode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            DenialCode::EnvelopeInvalid => "ENVELOPE_INVALID",
+            DenialCode::EnvelopeEnumInvalid => "ENVELOPE_ENUM_INVALID",
+            DenialCode::AcceptanceNotAuthorized => "ACCEPTANCE_NOT_AUTHORIZED",
+            DenialCode::SelfAmendmentDenied => "SELF_AMENDMENT_DENIED",
+            DenialCode::AuthoritySelfAmendmentDenied => "AUTHORITY_SELF_AMENDMENT_DENIED",
+            DenialCode::AuthorityMissingOperations => "AUTHORITY_MISSING_OPERATIONS",
+            DenialCode::AuthorityExpired => "AUTHORITY_EXPIRED",
+            DenialCode::AuthorityRevoked => "AUTHORITY_REVOKED",
+            DenialCode::OperationNotAuthorized => "OPERATION_NOT_AUTHORIZED",
+            DenialCode::OperationForbidden => "OPERATION_FORBIDDEN",
+            DenialCode::TargetOutsideAuthority => "TARGET_OUTSIDE_AUTHORITY",
+            DenialCode::MutationNotAuthorized => "MUTATION_NOT_AUTHORIZED",
+            DenialCode::ProfileGraftDenied => "PROFILE_GRAFT_DENIED",
+            DenialCode::ContextIncomplete => "CONTEXT_INCOMPLETE",
+            DenialCode::OmittedApplicableCommitment => "OMITTED_APPLICABLE_COMMITMENT",
+            DenialCode::UnresolvedSelector => "UNRESOLVED_SELECTOR",
+            DenialCode::UnresolvedDependencyEdge => "UNRESOLVED_DEPENDENCY_EDGE",
+            DenialCode::EpisodeNotActive => "EPISODE_NOT_ACTIVE",
+            DenialCode::EpisodeOutcomeMissing => "EPISODE_OUTCOME_MISSING",
+            DenialCode::UncontrolledEffect => "UNCONTROLLED_EFFECT",
+            DenialCode::EvaluationResultInvalid => "EVALUATION_RESULT_INVALID",
+            DenialCode::EvaluationNotSatisfied => "EVALUATION_NOT_SATISFIED",
+            DenialCode::EvaluationFailedNotAPass => "EVALUATION_FAILED_NOT_A_PASS",
+            DenialCode::EvaluationRevisionMismatch => "EVALUATION_REVISION_MISMATCH",
+            DenialCode::EvaluationStale => "EVALUATION_STALE",
+            DenialCode::CoverageIncomplete => "COVERAGE_INCOMPLETE",
+            DenialCode::CoverageUnknownNonempty => "COVERAGE_UNKNOWN_NONEMPTY",
+            DenialCode::CoverageExclusionNotPermitted => "COVERAGE_EXCLUSION_NOT_PERMITTED",
+            DenialCode::CoverageDigestMismatch => "COVERAGE_DIGEST_MISMATCH",
+            DenialCode::SegmentDigestMismatch => "SEGMENT_DIGEST_MISMATCH",
+            DenialCode::SegmentCommitMarkerMissing => "SEGMENT_COMMIT_MARKER_MISSING",
+            DenialCode::ProjectionUntrusted => "PROJECTION_UNTRUSTED",
+            DenialCode::EvidencePinMismatch => "EVIDENCE_PIN_MISMATCH",
+            DenialCode::EvidenceScopeMismatch => "EVIDENCE_SCOPE_MISMATCH",
+            DenialCode::WorkspaceExists => "WORKSPACE_EXISTS",
+            DenialCode::NoOpNotDeclared => "NO_OP_NOT_DECLARED",
+            DenialCode::PreflightViolated => "PREFLIGHT_VIOLATED",
+            DenialCode::PreflightUnknown => "PREFLIGHT_UNKNOWN",
+            DenialCode::EpisodeAlreadyActive => "EPISODE_ALREADY_ACTIVE",
+        }
+    }
+}
+
+impl std::fmt::Display for DenialCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Error type: ControlDenial analog. Everything user-visible routes through
+// denials_text::describe_denial (added in a later step), CODE-first.
+
+#[derive(Debug)]
+pub enum KraddleError {
+    Control { code: DenialCode, detail: Value },
+    Io(std::io::Error),
+    Json(serde_json::Error),
+}
+
+impl KraddleError {
+    pub fn control(code: DenialCode, detail: Value) -> Self {
+        KraddleError::Control { code, detail }
+    }
+
+    pub fn code(&self) -> Option<DenialCode> {
+        match self {
+            KraddleError::Control { code, .. } => Some(*code),
+            _ => None,
+        }
+    }
+
+    pub fn detail(&self) -> Value {
+        match self {
+            KraddleError::Control { detail, .. } => detail.clone(),
+            _ => Value::Null,
+        }
+    }
+}
+
+impl std::fmt::Display for KraddleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            KraddleError::Control { code, detail } => {
+                // ControlDenial's message is `${code}: ${JSON.stringify(detail)}`.
+                write!(f, "{}: {}", code.as_str(), serde_json::to_string(detail).unwrap_or_default())
+            }
+            KraddleError::Io(err) => write!(f, "{}", err),
+            KraddleError::Json(err) => write!(f, "{}", err),
+        }
+    }
+}
+
+impl std::error::Error for KraddleError {}
+
+impl From<std::io::Error> for KraddleError {
+    fn from(err: std::io::Error) -> Self {
+        KraddleError::Io(err)
+    }
+}
+
+impl From<serde_json::Error> for KraddleError {
+    fn from(err: serde_json::Error) -> Self {
+        KraddleError::Json(err)
+    }
+}
+
+pub type KResult<T> = Result<T, KraddleError>;
+
+// ---------------------------------------------------------------------------
+// Digests (R4/D1): digests over canonical JSON — object keys sorted
+// (serde_json's default BTreeMap ordering), arrays in order. Node computes
+// the same via its canonicalJson() (added in the Step 0 amendment).
+
+pub fn sha256_hex(input: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(input.as_bytes());
+    let out = hasher.finalize();
+    let mut hex = String::with_capacity(out.len() * 2);
+    for byte in out {
+        hex.push_str(&format!("{:02x}", byte));
+    }
+    hex
+}
+
+/// Digest over the canonical serialization of a JSON value.
+pub fn digest_of_value(value: &Value) -> String {
+    sha256_hex(&serde_json::to_string(value).unwrap_or_default())
+}
+
+/// Canonical JSON: identical bytes to Node's canonicalJson() — serde_json's
+/// default (BTreeMap) serializes object keys sorted, arrays in order.
+pub fn canonical_json(value: &Value) -> String {
+    serde_json::to_string(value).unwrap_or_default()
+}
+
+pub fn now_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+pub fn new_uuid() -> String {
+    uuid::Uuid::new_v4().to_string()
+}
+
+// ---------------------------------------------------------------------------
+// Envelope (§3.3 of the Phase 0 plan): every canonical record carries it.
+
+pub const ENVELOPE_ENUMS: &[(&str, &[&str])] = &[
+    ("origin", &["human", "extractor", "agent", "policy", "import"]),
+    ("epistemic_basis", &["observed", "derived", "interpreted", "asserted"]),
+    ("approval_state", &["proposed", "accepted", "rejected", "superseded"]),
+    ("freshness_state", &["current", "stale", "expired"]),
+];
+
+pub const ENVELOPE_REQUIRED: &[&str] = &[
+    "id",
+    "kind",
+    "origin",
+    "epistemic_basis",
+    "approval_state",
+    "freshness_state",
+    "recorded_at",
+];
+
+/// Port of validateEnvelope: operates on the raw JSON object so that the
+/// Node semantics (undefined/null distinction, `confidence: null` being
+/// present-but-invalid) are preserved exactly.
+pub fn validate_envelope(record: &Value) -> KResult<()> {
+    let missing: Vec<&str> = ENVELOPE_REQUIRED
+        .iter()
+        .filter(|field| {
+            let value = record.get(**field);
+            value.is_none() || matches!(value, Some(Value::Null))
+        })
+        .copied()
+        .collect();
+    if !missing.is_empty() {
+        return Err(KraddleError::control(
+            DenialCode::EnvelopeInvalid,
+            json!({ "id": record.get("id").cloned().unwrap_or(Value::Null), "missing": missing }),
+        ));
+    }
+    for (field, allowed) in ENVELOPE_ENUMS {
+        let value = record.get(*field);
+        let ok = value.and_then(|v| v.as_str()).map(|s| allowed.contains(&s)).unwrap_or(false);
+        if !ok {
+            return Err(KraddleError::control(
+                DenialCode::EnvelopeEnumInvalid,
+                json!({ "id": record.get("id").cloned().unwrap_or(Value::Null), "field": field, "value": value.cloned().unwrap_or(Value::Null) }),
+            ));
+        }
+    }
+    if let Some(confidence) = record.get("confidence") {
+        let valid = confidence
+            .as_f64()
+            .map(|n| (0.0..=1.0).contains(&n))
+            .unwrap_or(false);
+        if !valid {
+            return Err(KraddleError::control(
+                DenialCode::EnvelopeEnumInvalid,
+                json!({ "id": record.get("id").cloned().unwrap_or(Value::Null), "field": "confidence", "value": confidence.clone() }),
+            ));
+        }
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Record (R6): one generic record struct — typed envelope + extra field map.
+// No per-kind typed taxonomy; typed accessors only.
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Record {
+    pub id: String,
+    pub kind: String,
+    pub origin: String,
+    pub epistemic_basis: String,
+    pub approval_state: String,
+    pub freshness_state: String,
+    pub recorded_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "scope_id")]
+    pub scope_id: Option<String>,
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
+}
+
+impl Record {
+    /// Human-authored record with accepted defaults (the `env()` helper of
+    /// the Node test fixtures).
+    pub fn human(id: &str, kind: &str) -> Self {
+        Record {
+            id: id.to_string(),
+            kind: kind.to_string(),
+            origin: "human".into(),
+            epistemic_basis: "asserted".into(),
+            approval_state: "accepted".into(),
+            freshness_state: "current".into(),
+            recorded_at: 1756771200000,
+            confidence: None,
+            scope_id: None,
+            extra: Map::new(),
+        }
+    }
+
+    pub fn human_at(id: &str, kind: &str, recorded_at: u64) -> Self {
+        let mut record = Record::human(id, kind);
+        record.recorded_at = recorded_at;
+        record
+    }
+
+    pub fn with(mut self, key: &str, value: Value) -> Self {
+        self.extra.insert(key.to_string(), value);
+        self
+    }
+
+    pub fn field(&self, key: &str) -> Option<&Value> {
+        self.extra.get(key)
+    }
+
+    pub fn str_field(&self, key: &str) -> Option<&str> {
+        self.extra.get(key).and_then(|v| v.as_str())
+    }
+
+    pub fn bool_field(&self, key: &str) -> Option<bool> {
+        self.extra.get(key).and_then(|v| v.as_bool())
+    }
+
+    pub fn num_field(&self, key: &str) -> Option<f64> {
+        self.extra.get(key).and_then(|v| v.as_f64())
+    }
+
+    pub fn set_field(&mut self, key: &str, value: Value) {
+        self.extra.insert(key.to_string(), value);
+    }
+
+    /// Node's record.value for commitments (string or selector object).
+    pub fn value_field(&self) -> Option<&Value> {
+        self.extra.get("value")
+    }
+
+    pub fn to_json(&self) -> Value {
+        serde_json::to_value(self).unwrap_or(Value::Null)
+    }
+
+    pub fn from_json(value: &Value) -> KResult<Self> {
+        serde_json::from_value::<Record>(value.clone())
+            .map_err(|err| KraddleError::Json(err))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// State: five BTreeMap collections (deterministic iteration, canonical
+// ordering — D10).
+
+#[derive(Debug, Default, Clone)]
+pub struct State {
+    pub units: std::collections::BTreeMap<String, Record>,
+    pub commitments: std::collections::BTreeMap<String, Record>,
+    pub relationships: std::collections::BTreeMap<String, Record>,
+    pub evidence: std::collections::BTreeMap<String, Record>,
+    pub scopes: std::collections::BTreeMap<String, Record>,
+}
+
+pub fn empty_state() -> State {
+    State::default()
+}
+
+/// Port of applyOperation. The operation is a raw JSON object
+/// `{ "type": ..., "value": ... }` exactly as in Node.
+pub fn apply_operation(state: &mut State, operation: &Value) -> KResult<()> {
+    let op_type = operation.get("type").and_then(|v| v.as_str()).unwrap_or("");
+    let value = operation.get("value");
+
+    let id = value
+        .and_then(|v| v.get("id"))
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+    let Some(id) = id else {
+        return Err(KraddleError::control(
+            DenialCode::EnvelopeInvalid,
+            json!({ "type": op_type, "missing": ["id"] }),
+        ));
+    };
+
+    if op_type == "unit.tombstone" {
+        let Some(mut unit) = state.units.get(&id).cloned() else {
+            return Err(KraddleError::control(
+                DenialCode::EnvelopeInvalid,
+                json!({ "type": op_type, "id": id, "reason": "unknown_record" }),
+            ));
+        };
+        unit.set_field("tombstoned", Value::Bool(true));
+        state.units.insert(id, unit);
+        return Ok(());
+    }
+
+    let value = value.cloned().unwrap_or(Value::Null);
+    validate_envelope(&value)?;
+    let record = Record::from_json(&value)?;
+    let collection = match op_type {
+        "unit.create" | "unit.update" => Collection::Units,
+        "commitment.create" | "commitment.update" => Collection::Commitments,
+        "relationship.add" | "relationship.update" => Collection::Relationships,
+        "evidence.create" | "evidence.update" => Collection::Evidence,
+        "scope.create" | "scope.update" => Collection::Scopes,
+        _ => {
+            return Err(KraddleError::control(
+                DenialCode::EnvelopeInvalid,
+                json!({ "type": op_type, "reason": "unknown_operation" }),
+            ));
+        }
+    };
+    let target = match collection {
+        Collection::Units => &mut state.units,
+        Collection::Commitments => &mut state.commitments,
+        Collection::Relationships => &mut state.relationships,
+        Collection::Evidence => &mut state.evidence,
+        Collection::Scopes => &mut state.scopes,
+    };
+    target.insert(id, record);
+    Ok(())
+}
+
+enum Collection {
+    Units,
+    Commitments,
+    Relationships,
+    Evidence,
+    Scopes,
+}
