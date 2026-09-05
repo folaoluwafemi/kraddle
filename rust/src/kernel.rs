@@ -618,3 +618,294 @@ pub fn profile_role<'a>(state: &'a State, profile_id: &str, role: &str, target_t
 pub fn profile_state(root: &Record) -> &str {
     root.str_field("lifecycle").unwrap_or("draft")
 }
+
+// ---------------------------------------------------------------------------
+// Workspace: committed event segments under <root>/.kraddle/events.
+
+use std::path::PathBuf;
+use std::sync::Mutex;
+
+#[derive(Default)]
+struct Inner {
+    state: State,
+    heads: Vec<String>,
+    trusted: bool,
+    quarantined: Vec<Value>,
+}
+
+pub struct LoadResult {
+    pub state: State,
+    pub heads: Vec<String>,
+    pub trusted: bool,
+    pub quarantined: Vec<Value>,
+    pub projected_through: usize,
+}
+
+pub struct TransactOptions {
+    pub profile_ids: Vec<String>,
+    pub actor_id: String,
+    pub episode_id: Option<String>,
+}
+
+impl Default for TransactOptions {
+    fn default() -> Self {
+        TransactOptions { profile_ids: Vec::new(), actor_id: "human".into(), episode_id: None }
+    }
+}
+
+pub struct Workspace {
+    pub root: PathBuf,
+    kraddle: PathBuf,
+    events: PathBuf,
+    inner: Mutex<Inner>,
+}
+
+impl Workspace {
+    pub fn new(root: impl Into<PathBuf>) -> Self {
+        let root = root.into();
+        let kraddle = root.join(".kraddle");
+        let events = kraddle.join("events");
+        Workspace { root, kraddle, events, inner: Mutex::new(Inner::default()) }
+    }
+
+    /// Port of init(): refuses to overwrite an existing workspace.
+    pub fn init(&self) -> KResult<Value> {
+        let manifest_path = self.kraddle.join("manifest.krd");
+        if manifest_path.exists() {
+            return Err(KraddleError::control(
+                DenialCode::WorkspaceExists,
+                json!({ "root": self.root.to_string_lossy() }),
+            ));
+        }
+        std::fs::create_dir_all(&self.events)?;
+        std::fs::create_dir_all(self.kraddle.join("objects"))?;
+        std::fs::create_dir_all(self.kraddle.join("indexes"))?;
+        std::fs::create_dir_all(self.kraddle.join("local"))?;
+        let manifest = json!({ "format": "kraddle/alpha", "workspaceId": new_uuid() });
+        std::fs::write(manifest_path, format!("{}\n", canonical_json(&manifest)))?;
+        std::fs::write(
+            self.kraddle.join("heads.krd"),
+            format!("{}\n", canonical_json(&json!({ "heads": [] }))),
+        )?;
+        Ok(manifest)
+    }
+
+    /// Port of load(): lexical segment order, quarantine fail-closed,
+    /// stop after the first bad segment.
+    pub fn load(&self) -> KResult<LoadResult> {
+        let mut inner = self.inner.lock().expect("workspace lock poisoned");
+        let mut files: Vec<String> = Vec::new();
+        for entry in std::fs::read_dir(&self.events)? {
+            let entry = entry?;
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.ends_with(".krd") {
+                files.push(name);
+            }
+        }
+        files.sort();
+
+        let mut state = empty_state();
+        let mut heads: Vec<String> = Vec::new();
+        let mut projected_through: usize = 0;
+        let mut quarantine: Option<Value> = None;
+        // Segments are applied in lexical segment order (sorted filename
+        // order). There are no causal clocks; lexical segment order is the
+        // only ordering available.
+        for file in &files {
+            let content = std::fs::read_to_string(self.events.join(file))?;
+            let parsed = parse_segment(&content);
+            let Some((operations, commit)) = parsed else {
+                quarantine = Some(json!({
+                    "file": file,
+                    "code": DenialCode::SegmentCommitMarkerMissing.as_str(),
+                    "index": projected_through,
+                }));
+                break;
+            };
+            let commit_value = commit.get("value").cloned().unwrap_or(Value::Null);
+            let actual = digest_of_value(&Value::Array(operations.clone()));
+            let expected = commit_value.get("operationsDigest").and_then(|d| d.as_str());
+            if expected != Some(actual.as_str()) {
+                quarantine = Some(json!({
+                    "file": file,
+                    "code": DenialCode::SegmentDigestMismatch.as_str(),
+                    "index": projected_through,
+                }));
+                break;
+            }
+            for operation in &operations {
+                apply_operation(&mut state, operation)?;
+            }
+            heads.push(
+                commit_value
+                    .get("transactionId")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
+            );
+            projected_through += 1;
+        }
+
+        let trusted = quarantine.is_none();
+        let quarantined = match quarantine {
+            Some(q) => vec![q],
+            None => Vec::new(),
+        };
+        std::fs::write(
+            self.kraddle.join("local").join("quarantine.json"),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&json!({
+                    "trusted": trusted,
+                    "quarantined": quarantined,
+                    "projectedThrough": projected_through,
+                }))
+                .unwrap_or_default()
+            ),
+        )?;
+
+        inner.state = state.clone();
+        inner.heads = heads.clone();
+        inner.trusted = trusted;
+        inner.quarantined = quarantined.clone();
+
+        Ok(LoadResult { state, heads, trusted, quarantined, projected_through })
+    }
+
+    /// Port of transact(): authorized acceptance, profile validation,
+    /// canonical operation digests, atomic write-temp-rename.
+    pub fn transact(&self, operations: &[Value], options: &TransactOptions) -> KResult<String> {
+        let mut inner = self.inner.lock().expect("workspace lock poisoned");
+        if operations.is_empty() {
+            return Err(KraddleError::control(
+                DenialCode::EnvelopeInvalid,
+                json!({ "reason": "empty_transaction" }),
+            ));
+        }
+        if options.episode_id.is_some() {
+            // Mutation authorization lands with the Step 4 port
+            // (authorize_mutation), matching the Node phased build.
+        }
+        if options.actor_id != "human" && !options.actor_id.starts_with("policy-") {
+            for operation in operations {
+                let accepted = operation
+                    .get("value")
+                    .and_then(|v| v.get("approval_state"))
+                    .and_then(|s| s.as_str())
+                    == Some("accepted");
+                if accepted {
+                    return Err(KraddleError::control(
+                        DenialCode::AcceptanceNotAuthorized,
+                        json!({
+                            "actorId": options.actor_id,
+                            "recordId": operation.get("value").and_then(|v| v.get("id")).cloned().unwrap_or(Value::Null),
+                        }),
+                    ));
+                }
+            }
+        }
+        let mut next = inner.state.clone();
+        for operation in operations {
+            apply_operation(&mut next, operation)?;
+        }
+        for profile_id in &options.profile_ids {
+            validate_profile(&next, profile_id)?;
+        }
+        let transaction_id = new_uuid();
+        let prepared: Vec<Value> = operations
+            .iter()
+            .map(|operation| {
+                let mut object = match operation.clone() {
+                    Value::Object(map) => map,
+                    other => {
+                        let mut map = Map::new();
+                        map.insert("value".into(), other);
+                        map
+                    }
+                };
+                object.insert("transactionId".into(), json!(transaction_id));
+                object.insert("actorId".into(), json!(options.actor_id));
+                Value::Object(object)
+            })
+            .collect();
+        let operations_digest = digest_of_value(&Value::Array(prepared.clone()));
+        let commit = json!({
+            "type": "transaction.commit",
+            "value": {
+                "transactionId": transaction_id,
+                "actorId": options.actor_id,
+                "operationsDigest": operations_digest,
+                "profileIds": options.profile_ids,
+            }
+        });
+        let file = format!("{}-{}.krd", now_millis(), transaction_id);
+        let temporary = self.events.join(format!(".{}.tmp", file));
+        let mut lines: Vec<String> = prepared
+            .iter()
+            .map(|item| serde_json::to_string(item).unwrap_or_default())
+            .collect();
+        lines.push(serde_json::to_string(&commit).unwrap_or_default());
+        // rename is atomic but not fsync-durable; a crash after rename may
+        // lose the tail of the event history. Stated durability limitation
+        // of Phase 0, not a guarantee.
+        std::fs::write(&temporary, format!("{}\n", lines.join("\n")))?;
+        std::fs::rename(&temporary, self.events.join(&file))?;
+        inner.state = next;
+        inner.heads.push(transaction_id.clone());
+        std::fs::write(
+            self.kraddle.join("heads.krd"),
+            format!("{}\n", canonical_json(&json!({ "heads": inner.heads }))),
+        )?;
+        Ok(transaction_id)
+    }
+
+    /// Live state snapshot (the server reads state after every transact —
+    /// Phase 2's stale-state bug is load-bearing here).
+    pub fn state(&self) -> State {
+        self.inner.lock().expect("workspace lock poisoned").state.clone()
+    }
+
+    pub fn heads(&self) -> Vec<String> {
+        self.inner.lock().expect("workspace lock poisoned").heads.clone()
+    }
+
+    /// Run a mutation against the live state under the workspace lock.
+    pub fn with_state_mut<R>(&self, f: impl FnOnce(&mut State) -> R) -> R {
+        let mut inner = self.inner.lock().expect("workspace lock poisoned");
+        f(&mut inner.state)
+    }
+
+    pub fn is_trusted(&self) -> bool {
+        self.inner.lock().expect("workspace lock poisoned").trusted
+    }
+}
+
+/// Parse one event segment: all lines as JSON, last line must be the
+/// transaction.commit marker. Any failure yields None (the caller
+/// quarantines with SEGMENT_COMMIT_MARKER_MISSING, as Node does).
+fn parse_segment(content: &str) -> Option<(Vec<Value>, Value)> {
+    let mut lines: Vec<Value> = Vec::new();
+    for line in content.trim().split('\n') {
+        if line.trim().is_empty() {
+            continue;
+        }
+        lines.push(serde_json::from_str::<Value>(line).ok()?);
+    }
+    let last = lines.last()?.clone();
+    if last.get("type").and_then(|t| t.as_str()) == Some("transaction.commit") {
+        Some((lines[..lines.len() - 1].to_vec(), last))
+    } else {
+        None
+    }
+}
+
+/// Port of requireTrustedProjection.
+pub fn require_trusted_projection(trusted: bool, quarantined: &[Value]) -> KResult<()> {
+    if !trusted {
+        return Err(KraddleError::control(
+            DenialCode::ProjectionUntrusted,
+            json!({ "quarantined": quarantined }),
+        ));
+    }
+    Ok(())
+}

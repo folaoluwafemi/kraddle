@@ -1,47 +1,18 @@
-//! Port of test/kernel.test.js — state, profiles, validation.
-//! Workspace-persistence cases (reload, init-twice, concurrency) land with
-//! the Step 2 port; admission and closure cases land with Steps 3 and 5.
+//! Port of test/kernel.test.js — state, profiles, validation, persistence.
+//! Admission and closure cases land with Steps 3 and 5.
 
+mod common;
+
+use common::{commitment, expect_control, op, rel, TempDir, unit};
 use kraddle::kernel::{
-    apply_operation, empty_state, DenialCode, KraddleError, Record, State, validate_profile,
+    empty_state, DenialCode, KraddleError, State, TransactOptions, Workspace, validate_profile,
 };
 use serde_json::{json, Value};
-
-fn unit(id: &str, kind: &str) -> Record {
-    Record::human(id, kind).with("title", json!(kind))
-}
-
-fn commitment(id: &str, value: &str) -> Record {
-    Record::human(id, "commitment")
-        .with("type", json!("statement"))
-        .with("value", json!(value))
-}
-
-fn rel(id: &str, profile_id: &str, role: &str, target_id: &str, target_type: &str) -> Record {
-    Record::human(id, "relationship")
-        .with("profileId", json!(profile_id))
-        .with("role", json!(role))
-        .with("targetId", json!(target_id))
-        .with("targetType", json!(target_type))
-}
-
-fn op(kind: &str, record: &Record) -> Value {
-    json!({ "type": kind, "value": record.to_json() })
-}
+use std::sync::Arc;
 
 fn apply_all(state: &mut State, ops: &[Value]) {
     for operation in ops {
-        apply_operation(state, operation).expect("operation applies");
-    }
-}
-
-fn expect_control(result: Result<Value, KraddleError>, code: DenialCode) -> KraddleError {
-    match result {
-        Err(err @ KraddleError::Control { code: actual, .. }) => {
-            assert_eq!(actual, code, "expected {:?}, got {:?}", code, err);
-            err
-        }
-        other => panic!("expected denial {:?}, got {:?}", code, other.map(|v| v.to_string())),
+        kraddle::kernel::apply_operation(state, operation).expect("operation applies");
     }
 }
 
@@ -105,4 +76,125 @@ fn rejects_invalid_evaluation_results() {
     }
 
     expect_control(validate_profile(&state, "p"), DenialCode::EvaluationResultInvalid);
+}
+
+#[test]
+fn writes_and_reloads_a_valid_control_binding_from_committed_files() {
+    let temp = TempDir::new("kraddle-kernel");
+    let store = Workspace::new(temp.path());
+    store.init().expect("init");
+
+    let operations = vec![
+        op("unit.create", &unit("profile", "control_binding")),
+        op("commitment.create", &commitment("governed", "Domain does not import UI")),
+        op("commitment.create", &commitment("selector", "src/domain/**")),
+        op("commitment.create", &commitment("modality", "invariant").with("type", json!("has_modality"))),
+        op("unit.create", &unit("evaluator", "evaluator")),
+        op("relationship.add", &rel("r1", "profile", "governed_commitment", "governed", "commitment")),
+        op("relationship.add", &rel("r2", "profile", "subject_selector", "selector", "commitment")),
+        op("relationship.add", &rel("r3", "profile", "modality", "modality", "commitment")),
+        op("relationship.add", &rel("r4", "profile", "evaluator", "evaluator", "unit")),
+    ];
+    store
+        .transact(&operations, &TransactOptions { profile_ids: vec!["profile".into()], ..Default::default() })
+        .expect("transact");
+
+    let reloaded = Workspace::new(temp.path());
+    let result = reloaded.load().expect("load");
+    assert_eq!(result.state.units.get("profile").map(|r| r.kind.as_str()), Some("control_binding"));
+    assert_eq!(result.heads.len(), 1);
+}
+
+#[test]
+fn reloads_a_committed_transaction() {
+    let temp = TempDir::new("kraddle-kernel");
+    let store = Workspace::new(temp.path());
+    store.init().expect("init");
+
+    store
+        .transact(&[op("unit.create", &unit("u1", "behavior"))], &TransactOptions::default())
+        .expect("transact");
+
+    let reloaded = Workspace::new(temp.path());
+    let result = reloaded.load().expect("load");
+    assert_eq!(result.state.units.len(), 1);
+    assert!(result.trusted);
+    assert_eq!(result.projected_through, 1);
+    let heads = std::fs::read_to_string(temp.path().join(".kraddle").join("heads.krd")).unwrap();
+    assert!(heads.contains("heads"));
+}
+
+#[test]
+fn init_refuses_to_overwrite_an_existing_workspace() {
+    let temp = TempDir::new("kraddle-kernel");
+    let store = Workspace::new(temp.path());
+    let first = store.init().expect("init");
+    let err = expect_control(store.init(), DenialCode::WorkspaceExists);
+    assert_eq!(err.code(), Some(DenialCode::WorkspaceExists));
+    let on_disk: Value = serde_json::from_str(
+        &std::fs::read_to_string(temp.path().join(".kraddle").join("manifest.krd")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(on_disk.get("workspaceId"), first.get("workspaceId"));
+}
+
+#[test]
+fn an_existing_workspace_opens_with_load_not_init() {
+    let temp = TempDir::new("kraddle-kernel");
+    let store = Workspace::new(temp.path());
+    store.init().expect("init");
+
+    store
+        .transact(&[op("unit.create", &unit("u1", "behavior"))], &TransactOptions::default())
+        .expect("transact");
+
+    let reloaded = Workspace::new(temp.path());
+    let result = reloaded.load().expect("load");
+    assert!(result.state.units.contains_key("u1"));
+    assert!(result.trusted);
+}
+
+#[test]
+fn concurrent_transactions_are_serialized() {
+    let temp = TempDir::new("kraddle-kernel");
+    let store = Arc::new(Workspace::new(temp.path()));
+    store.init().expect("init");
+
+    let left = Arc::clone(&store);
+    let right = Arc::clone(&store);
+    let handle_left = std::thread::spawn(move || {
+        left.transact(&[op("unit.create", &unit("t1", "behavior"))], &TransactOptions::default()).unwrap()
+    });
+    let handle_right = std::thread::spawn(move || {
+        right.transact(&[op("unit.create", &unit("t2", "behavior"))], &TransactOptions::default()).unwrap()
+    });
+    let tx1 = handle_left.join().expect("left transact");
+    let tx2 = handle_right.join().expect("right transact");
+
+    let events_dir = temp.path().join(".kraddle").join("events");
+    let segments: Vec<_> = std::fs::read_dir(&events_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.ends_with(".krd"))
+        .collect();
+    assert_eq!(segments.len(), 2);
+
+    let heads: Value = serde_json::from_str(
+        &std::fs::read_to_string(temp.path().join(".kraddle").join("heads.krd")).unwrap(),
+    )
+    .unwrap();
+    let heads_list = heads.get("heads").and_then(|h| h.as_array()).unwrap();
+    assert_eq!(heads_list.len(), 2);
+    assert!(heads_list.contains(&json!(tx1)));
+    assert!(heads_list.contains(&json!(tx2)));
+
+    let state = store.state();
+    assert!(state.units.contains_key("t1"));
+    assert!(state.units.contains_key("t2"));
+
+    let fresh = Workspace::new(temp.path());
+    let result = fresh.load().expect("load");
+    assert!(result.trusted);
+    assert_eq!(result.projected_through, 2);
 }

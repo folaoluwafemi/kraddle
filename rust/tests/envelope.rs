@@ -1,8 +1,9 @@
 //! Port of test/envelope.test.js — record envelope validation.
 
-use kraddle::kernel::{
-    apply_operation, empty_state, DenialCode, KraddleError, Record,
-};
+mod common;
+
+use common::{expect_control, TempDir};
+use kraddle::kernel::{apply_operation, empty_state, DenialCode, KraddleError, Record, TransactOptions, Workspace};
 use serde_json::json;
 
 fn base_record() -> Record {
@@ -61,4 +62,30 @@ fn confidence_above_1_is_rejected() {
     let mut value = base_record();
     value.confidence = Some(1.5);
     assert_control_code(attempt(value.to_json()), DenialCode::EnvelopeEnumInvalid);
+}
+
+#[test]
+fn a_non_human_actor_cannot_set_approval_state_accepted() {
+    let temp = TempDir::new("kraddle-envelope");
+    let store = Workspace::new(temp.path());
+    store.init().expect("init");
+    let result = store.transact(
+        &[json!({ "type": "unit.create", "value": base_record().to_json() })],
+        &TransactOptions { actor_id: "agent-1".into(), ..Default::default() },
+    );
+    expect_control(result, DenialCode::AcceptanceNotAuthorized);
+}
+
+#[test]
+fn a_human_actor_may_create_an_accepted_record() {
+    let temp = TempDir::new("kraddle-envelope");
+    let store = Workspace::new(temp.path());
+    store.init().expect("init");
+    store
+        .transact(
+            &[json!({ "type": "unit.create", "value": base_record().to_json() })],
+            &TransactOptions { actor_id: "human".into(), ..Default::default() },
+        )
+        .expect("transact");
+    assert_eq!(store.state().units.get("rec-1").map(|r| r.approval_state.as_str()), Some("accepted"));
 }
