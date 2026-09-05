@@ -3,9 +3,9 @@
 
 mod common;
 
-use common::{commitment, expect_control, op, rel, TempDir, unit};
+use common::{commitment, episode_state, expect_control, op, rel, TempDir, unit};
 use kraddle::kernel::{
-    empty_state, DenialCode, KraddleError, State, TransactOptions, Workspace, validate_profile,
+    admit_effect, empty_state, DenialCode, Effect, State, TransactOptions, Workspace, validate_profile,
 };
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -152,6 +152,30 @@ fn an_existing_workspace_opens_with_load_not_init() {
     let result = reloaded.load().expect("load");
     assert!(result.state.units.contains_key("u1"));
     assert!(result.trusted);
+}
+
+#[test]
+fn denies_effects_outside_an_episode_authority_envelope() {
+    let mut state = episode_state(
+        &[("operations", json!(["write"])), ("targetPrefix", json!("src/research/"))],
+        &[],
+        &[],
+    );
+    let admitted = admit_effect(
+        &mut state,
+        "EP1",
+        &Effect { operation: "write".into(), target: Some("src/research/context.ts".into()) },
+    )
+    .expect("admitted");
+    assert!(admitted.admitted);
+    expect_control(
+        admit_effect(&mut state, "EP1", &Effect { operation: "write".into(), target: Some("src/ui/App.tsx".into()) }),
+        DenialCode::TargetOutsideAuthority,
+    );
+    expect_control(
+        admit_effect(&mut state, "EP1", &Effect { operation: "execute".into(), target: Some("src/research/run.js".into()) }),
+        DenialCode::OperationNotAuthorized,
+    );
 }
 
 #[test]

@@ -342,6 +342,10 @@ impl Record {
         self.extra.insert(key.to_string(), value);
     }
 
+    pub fn field_mut(&mut self, key: &str) -> Option<&mut Value> {
+        self.extra.get_mut(key)
+    }
+
     /// Node's record.value for commitments (string or selector object).
     pub fn value_field(&self) -> Option<&Value> {
         self.extra.get("value")
@@ -908,4 +912,234 @@ pub fn require_trusted_projection(trusted: bool, quarantined: &[Value]) -> KResu
         ));
     }
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Admission and episode status
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct Effect {
+    pub operation: String,
+    pub target: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct Admission {
+    pub admitted: bool,
+    #[serde(rename = "episodeId")]
+    pub episode_id: String,
+    pub effect: Effect,
+    #[serde(rename = "admissionId")]
+    pub admission_id: String,
+    #[serde(rename = "admittedAt")]
+    pub admitted_at: u64,
+}
+
+/// Port of admitEffect: authority checks, split REVOKED/EXPIRED, missing
+/// operations, forbidden list, target prefix, admission ledger.
+pub fn admit_effect(state: &mut State, episode_id: &str, effect: &Effect) -> KResult<Admission> {
+    let episode = profile_root(state, episode_id)?.clone();
+    if episode.kind != "execution_episode" {
+        return Err(KraddleError::control(
+            DenialCode::EnvelopeInvalid,
+            json!({ "episodeId": episode_id, "kind": episode.kind, "reason": "not_execution_episode" }),
+        ));
+    }
+    validate_profile(state, episode_id)?;
+    let lifecycle = profile_state(&episode).to_string();
+    if lifecycle != "authorized" && lifecycle != "running" {
+        return Err(KraddleError::control(
+            DenialCode::EpisodeNotActive,
+            json!({ "episodeId": episode_id, "lifecycle": lifecycle }),
+        ));
+    }
+
+    let context = profile_role(state, episode_id, "context_envelope", "unit");
+    let context_invalid = context
+        .map(|c| c.bool_field("valid") == Some(false) || c.str_field("completeness") == Some("incomplete"))
+        .unwrap_or(false);
+    if context_invalid {
+        return Err(KraddleError::control(DenialCode::ContextIncomplete, json!({ "episodeId": episode_id })));
+    }
+    let context_incomplete = context.map(|c| c.bool_field("complete") == Some(false)).unwrap_or(false);
+    if context_incomplete {
+        let reasons = context
+            .and_then(|c| c.field("incompleteReasons").cloned())
+            .unwrap_or(json!([]));
+        return Err(KraddleError::control(
+            DenialCode::ContextIncomplete,
+            json!({ "episodeId": episode_id, "reasons": reasons }),
+        ));
+    }
+
+    let authority = profile_role(state, episode_id, "authority_grant", "unit");
+    if authority.map(|a| a.bool_field("revoked") == Some(true)).unwrap_or(false) {
+        return Err(KraddleError::control(DenialCode::AuthorityRevoked, json!({ "episodeId": episode_id })));
+    }
+    let expired = authority
+        .and_then(|a| a.num_field("expiresAt").map(|expires| expires <= now_millis() as f64))
+        .unwrap_or(false);
+    if expired {
+        return Err(KraddleError::control(DenialCode::AuthorityExpired, json!({ "episodeId": episode_id })));
+    }
+
+    let allowed = authority.and_then(|a| a.field("operations"));
+    let allowed_list: Option<Vec<&str>> = allowed
+        .and_then(|ops| ops.as_array())
+        .map(|ops| ops.iter().filter_map(|o| o.as_str()).collect::<Vec<&str>>());
+    // Node: !Array.isArray(allowed) -> denial. A non-array (or absent)
+    // operations field denies.
+    let is_array = allowed.map(|ops| ops.is_array()).unwrap_or(false);
+    if !is_array {
+        return Err(KraddleError::control(
+            DenialCode::AuthorityMissingOperations,
+            json!({ "episodeId": episode_id }),
+        ));
+    }
+    let allowed_list = allowed_list.unwrap_or_default();
+    if !allowed_list.contains(&effect.operation.as_str()) {
+        return Err(KraddleError::control(
+            DenialCode::OperationNotAuthorized,
+            json!({ "episodeId": episode_id, "operation": effect.operation }),
+        ));
+    }
+    let forbidden: Vec<String> = episode
+        .field("forbiddenOperations")
+        .and_then(|f| f.as_array())
+        .map(|list| list.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+        .unwrap_or_default();
+    if forbidden.contains(&effect.operation) {
+        return Err(KraddleError::control(
+            DenialCode::OperationForbidden,
+            json!({ "episodeId": episode_id, "operation": effect.operation }),
+        ));
+    }
+    if let (Some(target), Some(prefix)) = (
+        effect.target.as_deref(),
+        authority.and_then(|a| a.str_field("targetPrefix")),
+    ) {
+        if !target.starts_with(prefix) {
+            return Err(KraddleError::control(
+                DenialCode::TargetOutsideAuthority,
+                json!({ "episodeId": episode_id, "target": target, "targetPrefix": prefix }),
+            ));
+        }
+    }
+
+    let admitted_at = now_millis();
+    let admission_id = sha256_hex(&format!(
+        "{}{}{}{}",
+        episode_id,
+        effect.operation,
+        effect.target.clone().unwrap_or_default(),
+        admitted_at
+    ));
+    let live = state.units.get_mut(episode_id).expect("episode exists");
+    if !live.field("admittedEffects").map(|f| f.is_array()).unwrap_or(false) {
+        live.set_field("admittedEffects", json!([]));
+    }
+    if let Some(Value::Array(ledger)) = live.field_mut("admittedEffects") {
+        ledger.push(json!({
+            "admissionId": admission_id,
+            "admittedAt": admitted_at,
+            "operation": effect.operation,
+            "target": effect.target,
+        }));
+    }
+    Ok(Admission {
+        admitted: true,
+        episode_id: episode_id.to_string(),
+        effect: effect.clone(),
+        admission_id,
+        admitted_at,
+    })
+}
+
+/// Port of recordObservedEffect.
+pub fn record_observed_effect(state: &mut State, episode_id: &str, observed: &Value) -> KResult<Value> {
+    profile_root(state, episode_id)?;
+    let has_admission_id = observed
+        .as_object()
+        .map(|o| o.contains_key("admissionId"))
+        .unwrap_or(false);
+    if !has_admission_id {
+        return Err(KraddleError::control(
+            DenialCode::EnvelopeInvalid,
+            json!({ "episodeId": episode_id, "reason": "observed_effect_requires_admission_id" }),
+        ));
+    }
+    let observed_at_is_number = observed.get("observedAt").map(|v| v.is_number()).unwrap_or(false);
+    let record = if observed_at_is_number {
+        observed.as_object().cloned().unwrap_or_default()
+    } else {
+        // Node: { observedAt: Date.now(), ...observedEffect } — the observed
+        // object's own fields win over the default timestamp.
+        let mut map = Map::new();
+        map.insert("observedAt".into(), json!(now_millis()));
+        if let Some(object) = observed.as_object() {
+            for (key, value) in object {
+                map.insert(key.clone(), value.clone());
+            }
+        }
+        map
+    };
+    let episode = state.units.get_mut(episode_id).expect("episode exists");
+    if !episode.field("observedEffects").map(|f| f.is_array()).unwrap_or(false) {
+        episode.set_field("observedEffects", json!([]));
+    }
+    if let Some(Value::Array(list)) = episode.field_mut("observedEffects") {
+        list.push(Value::Object(record.clone()));
+    }
+    Ok(Value::Object(record))
+}
+
+/// Port of classifyEffect: an admission id authorizes exactly the effect it
+/// admitted — operation and target must match.
+pub fn classify_effect(state: &State, episode_id: &str, observed: &Value) -> Value {
+    let episode = match state.units.get(episode_id) {
+        Some(unit) => unit,
+        None => return json!({ "controlled": false, "code": DenialCode::UncontrolledEffect.as_str(), "reason": "episode_missing" }),
+    };
+    let admission_id = observed.get("admissionId");
+    if admission_id.is_none() || admission_id == Some(&Value::Null) {
+        return json!({ "controlled": false, "code": DenialCode::UncontrolledEffect.as_str(), "reason": "observed_without_admission" });
+    }
+    let ledger = episode
+        .field("admittedEffects")
+        .and_then(|f| f.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let admission = ledger.iter().find(|entry| entry.get("admissionId") == admission_id);
+    let Some(admission) = admission else {
+        return json!({ "controlled": false, "code": DenialCode::UncontrolledEffect.as_str(), "reason": "admission_not_in_ledger" });
+    };
+    let observed_operation = observed.get("operation").and_then(|v| v.as_str());
+    let admission_operation = admission.get("operation").and_then(|v| v.as_str());
+    let observed_target = observed.get("target").and_then(|v| v.as_str());
+    let admission_target = admission.get("target").and_then(|v| v.as_str());
+    if observed_operation != admission_operation || observed_target != admission_target {
+        return json!({ "controlled": false, "code": DenialCode::UncontrolledEffect.as_str(), "reason": "effect_mismatch" });
+    }
+    let observed_at = observed.get("observedAt").and_then(|v| v.as_f64());
+    let admitted_at = admission.get("admittedAt").and_then(|v| v.as_f64());
+    if let (Some(observed_at), Some(admitted_at)) = (observed_at, admitted_at) {
+        if admitted_at > observed_at {
+            return json!({ "controlled": false, "code": DenialCode::UncontrolledEffect.as_str(), "reason": "admitted_after_observation" });
+        }
+    }
+    json!({ "controlled": true })
+}
+
+/// Port of episodeStatus: suspension is derived, never mutated.
+pub fn episode_status(state: &State, episode_id: &str) -> KResult<String> {
+    let episode = profile_root(state, episode_id)?;
+    let authority = profile_role(state, episode_id, "authority_grant", "unit");
+    let revoked = authority.map(|a| a.bool_field("revoked") == Some(true)).unwrap_or(false);
+    let expired = authority
+        .and_then(|a| a.num_field("expiresAt").map(|expires| expires <= now_millis() as f64))
+        .unwrap_or(false);
+    if revoked || expired {
+        return Ok("suspended".into());
+    }
+    Ok(profile_state(episode).to_string())
 }

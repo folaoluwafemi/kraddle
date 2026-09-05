@@ -4,8 +4,10 @@
 
 mod common;
 
-use common::{unit, TempDir};
-use kraddle::kernel::{DenialCode, TransactOptions, Workspace};
+use common::{episode_fixture_operations, episode_state, expect_control, unit, TempDir};
+use kraddle::kernel::{
+    admit_effect, episode_status, DenialCode, Effect, TransactOptions, Workspace,
+};
 use serde_json::json;
 
 use std::thread::sleep;
@@ -64,6 +66,50 @@ fn ad12_an_interrupted_transaction_is_never_projected() {
 
 // The six deferred adversarial cases (R2): todo tests become #[ignore]
 // tests with the blocker stated in the name.
+
+#[test]
+fn ad13_revoked_authority_suspends_the_next_effect() {
+    let mut state = episode_state(
+        &[("operations", json!(["write"])), ("revoked", json!(true))],
+        &[],
+        &[],
+    );
+    expect_control(
+        admit_effect(&mut state, "EP1", &Effect { operation: "write".into(), target: Some("src/domain/a.ts".into()) }),
+        DenialCode::AuthorityRevoked,
+    );
+    assert_eq!(episode_status(&state, "EP1").unwrap(), "suspended");
+    assert_eq!(state.units.get("EP1").unwrap().str_field("lifecycle"), Some("running"));
+
+    let mut regression = episode_state(&[], &[("allowedOperations", json!(["write"]))], &[]);
+    expect_control(
+        admit_effect(&mut regression, "EP1", &Effect { operation: "write".into(), target: Some("src/domain/a.ts".into()) }),
+        DenialCode::AuthorityMissingOperations,
+    );
+
+    let temp = TempDir::new("kraddle-ad13");
+    let store = Workspace::new(temp.path());
+    store.init().expect("init");
+    store
+        .transact(
+            &episode_fixture_operations(&[("operations", json!(["write"])), ("revoked", json!(true))], &[]),
+            &TransactOptions { profile_ids: vec!["EP1".into()], ..Default::default() },
+        )
+        .expect("transact");
+    let reloaded = Workspace::new(temp.path());
+    let result = reloaded.load().expect("load");
+    assert_eq!(episode_status(&result.state, "EP1").unwrap(), "suspended");
+
+    let mut active = episode_state(&[("operations", json!(["write"]))], &[], &[]);
+    let admission = admit_effect(
+        &mut active,
+        "EP1",
+        &Effect { operation: "write".into(), target: Some("src/domain/a.ts".into()) },
+    )
+    .expect("admitted");
+    assert!(admission.admitted);
+    assert_eq!(episode_status(&active, "EP1").unwrap(), "running");
+}
 
 #[test]
 #[ignore = "blocked on code anchor subsystem"]
