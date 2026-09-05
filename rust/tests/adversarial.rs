@@ -5,11 +5,13 @@
 mod common;
 
 use common::{
-    closure_state, episode_fixture_operations, episode_state, expect_control, rel, unit, TempDir,
+    closure_state, coverage_object, episode_fixture_operations, episode_state, expect_control, rel,
+    unit, TempDir,
 };
 use kraddle::kernel::{
-    admit_effect, classify_effect, episode_status, record_observed_effect, validate_episode_closure,
-    DenialCode, Effect, Record, TransactOptions, Workspace,
+    admit_effect, classify_effect, compute_coverage_digest, episode_status, evaluate,
+    record_observed_effect, validate_coverage, validate_episode_closure, DenialCode, Effect,
+    EvalError, EvaluateArgs, Record, RunOutcome, TransactOptions, Workspace,
 };
 use serde_json::{json, Value};
 use std::path::Path;
@@ -364,6 +366,191 @@ fn a_matching_observed_effect_is_controlled() {
     assert_eq!(
         validate_episode_closure(&state, "EP1").unwrap(),
         json!({ "closable": true, "episodeId": "EP1" })
+    );
+}
+
+#[test]
+fn ad04_coverage_cannot_exclude_changed_files() {
+    let with_digest = |over: Vec<(&str, Value)>| -> Value {
+        let mut coverage = json!({
+            "requiredSubjects": ["src/domain/a.ts", "src/domain/b.ts"],
+            "coveredSubjects": ["src/domain/a.ts"],
+            "unknownSubjects": [],
+            "excludedSubjects": [],
+            "selectionMethod": "changed_files",
+        });
+        if let Some(map) = coverage.as_object_mut() {
+            for (key, value) in over {
+                map.insert(key.into(), value);
+            }
+        }
+        let digest = compute_coverage_digest(&coverage).expect("digest");
+        if let Some(map) = coverage.as_object_mut() {
+            map.insert("coverageDigest".into(), json!(digest));
+        }
+        coverage
+    };
+
+    let err = expect_control(
+        validate_coverage(Some(&with_digest(vec![])), &[]),
+        DenialCode::CoverageIncomplete,
+    );
+    assert_eq!(err.detail().get("missing"), Some(&json!(["src/domain/b.ts"])));
+
+    expect_control(
+        validate_coverage(Some(&with_digest(vec![("unknownSubjects", json!(["src/domain/c.ts"]))])), &[]),
+        DenialCode::CoverageUnknownNonempty,
+    );
+
+    expect_control(
+        validate_coverage(
+            Some(&with_digest(vec![
+                ("coveredSubjects", json!(["src/domain/a.ts", "src/domain/b.ts"])),
+                ("excludedSubjects", json!(["src/gen/x.ts"])),
+            ])),
+            &[],
+        ),
+        DenialCode::CoverageExclusionNotPermitted,
+    );
+
+    let mut hand_edited = with_digest(vec![]);
+    if let Some(map) = hand_edited.as_object_mut() {
+        map.insert("coverageDigest".into(), json!("0".repeat(64)));
+    }
+    expect_control(
+        validate_coverage(Some(&hand_edited), &[]),
+        DenialCode::CoverageDigestMismatch,
+    );
+
+    // Node's fixture computes the digest inside withDigest, so the
+    // ENVELOPE_INVALID for an empty subject surfaces there.
+    let empty_required = json!({
+        "requiredSubjects": [""],
+        "coveredSubjects": ["src/domain/a.ts"],
+        "unknownSubjects": [],
+        "excludedSubjects": [],
+        "selectionMethod": "changed_files",
+    });
+    expect_control(
+        compute_coverage_digest(&empty_required).map(|_| json!(())),
+        DenialCode::EnvelopeInvalid,
+    );
+
+    let digest_of = |required: Value| compute_coverage_digest(&json!({
+        "requiredSubjects": required,
+        "coveredSubjects": ["src/domain/a.ts"],
+        "unknownSubjects": [],
+        "excludedSubjects": [],
+    }))
+    .unwrap();
+    assert_eq!(digest_of(json!(["b", "a"])), digest_of(json!(["a", "b"])));
+    assert_eq!(digest_of(json!(["a", "a", "b"])), digest_of(json!(["a", "b"])));
+
+    assert_eq!(
+        validate_coverage(
+            Some(&with_digest(vec![("coveredSubjects", json!(["src/domain/a.ts", "src/domain/b.ts"]))])),
+            &[]
+        )
+        .unwrap(),
+        json!({ "sufficient": true })
+    );
+
+    let mut insufficient = closure_state(
+        &[],
+        &[("coverage", with_digest(vec![]))],
+        "satisfied",
+    );
+    admit_effect(&mut insufficient, "EP1", &Effect { operation: "write".into(), target: Some("src/domain/a.ts".into()) }).expect("admit");
+    expect_control(validate_episode_closure(&insufficient, "EP1"), DenialCode::CoverageIncomplete);
+}
+
+#[test]
+fn ad03_an_evaluator_failure_cannot_satisfy_a_blocking_obligation() {
+    let mut failed = closure_state(
+        &[],
+        &[("stateRef", json!({ "repository": "repo", "revision": "rev-b", "contentDigest": "digest-b" }))],
+        "evaluation_failed",
+    );
+    admit_effect(&mut failed, "EP1", &Effect { operation: "write".into(), target: Some("src/domain/a.ts".into()) }).expect("admit");
+    let err = expect_control(validate_episode_closure(&failed, "EP1"), DenialCode::EvaluationFailedNotAPass);
+    assert_ne!(err.code(), Some(DenialCode::EvaluationNotSatisfied));
+
+    let mut satisfied = closure_state(&[], &[], "satisfied");
+    admit_effect(&mut satisfied, "EP1", &Effect { operation: "write".into(), target: Some("src/domain/a.ts".into()) }).expect("admit");
+    assert_eq!(
+        validate_episode_closure(&satisfied, "EP1").unwrap(),
+        json!({ "closable": true, "episodeId": "EP1" })
+    );
+}
+
+#[test]
+fn ad11_an_evaluator_parse_failure_is_never_a_pass() {
+    let state_ref = json!({ "repository": "repo", "revision": "rev-b", "contentDigest": "digest-b" });
+    let args = EvaluateArgs {
+        evaluation_id: "EV1",
+        evaluator_id: "evaluator-1",
+        evaluator_version: "1.2.3",
+        subjects: Some(vec!["src/domain/a.ts".into()]),
+        state_ref: Some(state_ref.clone()),
+    };
+    let ev = evaluate(&args, |_| -> Result<RunOutcome, EvalError> {
+        Err(EvalError::Named { name: "SyntaxError".into(), message: "unexpected token".into() })
+    });
+    assert_eq!(ev.str_field("result"), Some("evaluation_failed"));
+    assert_eq!(ev.field("error").and_then(|e| e.get("message")).and_then(|m| m.as_str()), Some("unexpected token"));
+
+    let healthy = evaluate(&args, |_| Ok(RunOutcome { result: "satisfied".into(), coverage: Some(coverage_object()) }));
+    assert_eq!(healthy.str_field("result"), Some("satisfied"));
+    assert!(healthy.field("error").is_none());
+
+    let ev_value = ev.to_json();
+    let mut attached = closure_state(&[], &[], "evaluation_failed");
+    if let Some(unit) = attached.units.get_mut("EV1") {
+        let replacement = Record::from_json(&ev_value).unwrap();
+        *unit = replacement;
+    }
+    admit_effect(&mut attached, "EP1", &Effect { operation: "write".into(), target: Some("src/domain/a.ts".into()) }).expect("admit");
+    expect_control(validate_episode_closure(&attached, "EP1"), DenialCode::EvaluationFailedNotAPass);
+
+    // Persistence: a failed evaluation is a real observation and must
+    // survive reload, exactly like a satisfied one.
+    let temp = TempDir::new("kraddle-ad11");
+    let store = Workspace::new(temp.path());
+    store.init().expect("init");
+    let ev_record = Record::from_json(&ev_value).unwrap();
+    let mut ops = vec![
+        common::op("unit.create", &ev_record),
+        common::op("commitment.create", &common::commitment("target-c", "domain must not import ui")),
+        common::op("unit.create", &unit("selector-u", "selector")),
+        common::op("scope.create", &Record::human("scope-r", "scope")),
+        common::op("unit.create", &unit("evaluator-u", "evaluator")),
+        common::op("commitment.create", &common::commitment("result-c", "evaluation_failed")),
+        common::op("commitment.create", &common::commitment("coverage-c", "typed")),
+    ];
+    for (id, role, target_id, target_type) in [
+        ("ev-target", "target_commitment", "target-c", "commitment"),
+        ("ev-selector", "target_selector", "selector-u", "unit"),
+        ("ev-scope", "source_scope", "scope-r", "scope"),
+        ("ev-evaluator", "evaluator", "evaluator-u", "unit"),
+        ("ev-result", "result", "result-c", "commitment"),
+        ("ev-coverage", "coverage", "coverage-c", "commitment"),
+    ] {
+        ops.push(common::op("relationship.add", &rel(id, "EV1", role, target_id, target_type)));
+    }
+    store
+        .transact(&ops, &TransactOptions { profile_ids: vec!["EV1".into()], ..Default::default() })
+        .expect("transact");
+    let reloaded = Workspace::new(temp.path());
+    let result = reloaded.load().expect("load");
+    let persisted = result.state.units.get("EV1").unwrap();
+    assert_eq!(persisted.str_field("result"), Some("evaluation_failed"));
+    assert_eq!(persisted.str_field("evaluatorId"), Some("evaluator-1"));
+    assert_eq!(persisted.str_field("evaluatorVersion"), Some("1.2.3"));
+    assert_eq!(persisted.field("stateRef"), Some(&state_ref));
+    assert_eq!(persisted.field("subjects"), Some(&json!(["src/domain/a.ts"])));
+    assert_eq!(
+        persisted.field("error").and_then(|e| e.get("message")).and_then(|m| m.as_str()),
+        Some("unexpected token")
     );
 }
 

@@ -1563,3 +1563,106 @@ pub fn validate_episode_closure(state: &State, episode_id: &str) -> KResult<Valu
     }
     Ok(json!({ "closable": true, "episodeId": episode_id }))
 }
+
+// ---------------------------------------------------------------------------
+// evaluate: an injected evaluator run; failure is a real observation
+
+#[derive(Debug, Clone)]
+pub enum EvalError {
+    /// thrown Error: { name, message }
+    Named { name: String, message: String },
+    /// thrown non-Error: { name: "ThrownValue", message: String(thrown) }
+    Raw(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct RunOutcome {
+    pub result: String,
+    pub coverage: Option<Value>,
+}
+
+pub struct EvaluateArgs<'a> {
+    pub evaluation_id: &'a str,
+    pub evaluator_id: &'a str,
+    pub evaluator_version: &'a str,
+    pub subjects: Option<Vec<String>>,
+    pub state_ref: Option<Value>,
+}
+
+/// Port of evaluate: never produces "satisfied" from a throw or an
+/// unrecognized return value; a failed evaluation is a complete record.
+pub fn evaluate<F>(args: &EvaluateArgs, run: F) -> Record
+where
+    F: FnOnce(&[String]) -> Result<RunOutcome, EvalError>,
+{
+    let subject_list: Vec<String> = args.subjects.clone().unwrap_or_default();
+    let mut error: Option<Value> = None;
+    let (result, coverage) = match run(&subject_list) {
+        Ok(outcome) => {
+            if EVALUATION_RESULTS.contains(&outcome.result.as_str()) {
+                (outcome.result, outcome.coverage)
+            } else {
+                error = Some(json!({
+                    "name": "UnrecognizedResult",
+                    "message": "evaluator returned a result outside the result algebra",
+                    "value": outcome.result,
+                }));
+                ("evaluation_failed".to_string(), None)
+            }
+        }
+        Err(EvalError::Named { name, message }) => {
+            error = Some(json!({ "name": name, "message": message }));
+            ("evaluation_failed".to_string(), None)
+        }
+        Err(EvalError::Raw(message)) => {
+            error = Some(json!({ "name": "ThrownValue", "message": message }));
+            ("evaluation_failed".to_string(), None)
+        }
+    };
+
+    let final_coverage: Value = if result == "evaluation_failed" {
+        let subjects_json: Vec<Value> = subject_list.iter().map(|s| json!(s)).collect();
+        let mut coverage = json!({
+            "requiredSubjects": subjects_json.clone(),
+            "coveredSubjects": [],
+            "unknownSubjects": subjects_json,
+            "excludedSubjects": [],
+            "selectionMethod": "evaluator_run_failed",
+        });
+        if let Ok(digest) = compute_coverage_digest(&coverage) {
+            if let Some(map) = coverage.as_object_mut() {
+                map.insert("coverageDigest".into(), json!(digest));
+            }
+        }
+        coverage
+    } else {
+        coverage.unwrap_or(Value::Null)
+    };
+
+    let mut record = Record {
+        id: args.evaluation_id.to_string(),
+        kind: "evaluation".into(),
+        origin: "extractor".into(),
+        epistemic_basis: "derived".into(),
+        approval_state: "proposed".into(),
+        freshness_state: "current".into(),
+        recorded_at: now_millis(),
+        confidence: None,
+        scope_id: None,
+        extra: Map::new(),
+    };
+    record.set_field("evaluatorId", json!(args.evaluator_id));
+    record.set_field("evaluatorVersion", json!(args.evaluator_version));
+    record.set_field("subjects", json!(subject_list));
+    if let Some(state_ref) = &args.state_ref {
+        record.set_field("stateRef", state_ref.clone());
+    }
+    record.set_field("result", json!(result));
+    if !final_coverage.is_null() {
+        record.set_field("coverage", final_coverage);
+    }
+    if let Some(error) = error {
+        record.set_field("error", error);
+    }
+    record
+}
