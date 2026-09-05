@@ -198,3 +198,55 @@ pub fn closure_state(
     }
     state
 }
+
+/// Port of the adversarial suite's addBinding fixture: an accepted
+/// control_binding with all four roles.
+pub fn add_binding(state: &mut State, binding_id: &str, selector: Value) {
+    state.units.insert(binding_id.into(), Record::human(binding_id, "control_binding"));
+    state.commitments.insert(format!("{}-gov", binding_id), commitment(&format!("{}-gov", binding_id), "domain must not import ui"));
+    state
+        .commitments
+        .insert(format!("{}-sel", binding_id), Record::human(&format!("{}-sel", binding_id), "commitment").with("value", selector));
+    state.commitments.insert(
+        format!("{}-mod", binding_id),
+        commitment(&format!("{}-mod", binding_id), "prohibition").with("type", json!("has_modality")),
+    );
+    state.units.insert(format!("{}-ev", binding_id), unit(&format!("{}-ev", binding_id), "evaluator"));
+    state.relationships.insert(
+        format!("{}-r1", binding_id),
+        rel(&format!("{}-r1", binding_id), binding_id, "governed_commitment", &format!("{}-gov", binding_id), "commitment"),
+    );
+    state.relationships.insert(
+        format!("{}-r2", binding_id),
+        rel(&format!("{}-r2", binding_id), binding_id, "subject_selector", &format!("{}-sel", binding_id), "commitment"),
+    );
+    state.relationships.insert(
+        format!("{}-r3", binding_id),
+        rel(&format!("{}-r3", binding_id), binding_id, "modality", &format!("{}-mod", binding_id), "commitment"),
+    );
+    state.relationships.insert(
+        format!("{}-r4", binding_id),
+        rel(&format!("{}-r4", binding_id), binding_id, "evaluator", &format!("{}-ev", binding_id), "unit"),
+    );
+}
+
+/// Port of the adversarial suite's evidenceRecord fixture: extractor
+/// evidence pinned to rev-b, scoped to src/.
+pub fn evidence_record(id: &str, over: &[(&str, Value)]) -> Record {
+    let mut record = Record::human(id, "evidence");
+    record.origin = "extractor".into();
+    record.epistemic_basis = "observed".into();
+    record.set_field(
+        "stateRef",
+        json!({ "repository": "repo", "revision": "rev-b", "contentDigest": "digest-b" }),
+    );
+    record.set_field(
+        "edges",
+        json!([{ "from": "src/domain/a.ts", "to": "src/ui/Button.tsx", "resolution": "resolved" }]),
+    );
+    record.set_field("extractionScope", json!({ "fromPrefixes": ["src/"] }));
+    for (key, value) in over {
+        record.set_field(key, value.clone());
+    }
+    record
+}

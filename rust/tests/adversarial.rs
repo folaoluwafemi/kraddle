@@ -5,15 +5,17 @@
 mod common;
 
 use common::{
-    closure_state, coverage_object, episode_fixture_operations, episode_state, expect_control, rel,
-    unit, TempDir,
+    add_binding, closure_state, coverage_object, evidence_record, episode_fixture_operations,
+    episode_state, expect_control, rel, unit, TempDir,
 };
 use kraddle::kernel::{
-    admit_effect, classify_effect, compute_coverage_digest, episode_status, evaluate,
-    record_observed_effect, validate_coverage, validate_episode_closure, DenialCode, Effect,
-    EvalError, EvaluateArgs, Record, RunOutcome, TransactOptions, Workspace,
+    admit_effect, classify_effect, compute_coverage_digest, empty_state, episode_status, evaluate,
+    record_observed_effect, resolve_applicable_context, validate_coverage,
+    validate_episode_closure, verify_extraction, DenialCode, Effect, EvalError, EvaluateArgs,
+    Record, ResolverArgs, RunOutcome, TransactOptions, Workspace,
 };
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use std::thread::sleep;
@@ -552,6 +554,339 @@ fn ad11_an_evaluator_parse_failure_is_never_a_pass() {
         persisted.field("error").and_then(|e| e.get("message")).and_then(|m| m.as_str()),
         Some("unexpected token")
     );
+}
+
+#[test]
+fn ad01_a_narrow_context_cannot_omit_an_applicable_prohibition() {
+    let mut state = empty_state();
+    add_binding(&mut state, "CB1", json!({ "type": "path_prefix", "value": "src/domain/" }));
+    state.evidence.insert("EV-OK".into(), evidence_record("EV-OK", &[]));
+
+    let narrow = resolve_applicable_context(
+        &state,
+        &ResolverArgs {
+            task_scope_id: None,
+            target_paths: vec!["src/domain/service.ts".into()],
+            revision: None,
+            declared_applicable: vec![],
+            dependency_evidence_id: Some("EV-OK"),
+        },
+    );
+    assert!(!narrow.complete);
+    assert!(narrow.applicable.contains(&"CB1".to_string()));
+    assert!(narrow.omitted.contains(&"CB1".to_string()));
+    assert!(narrow
+        .incomplete_reasons
+        .contains(&DenialCode::OmittedApplicableCommitment.as_str().to_string()));
+
+    let mut denied = episode_state(
+        &[("operations", json!(["write"]))],
+        &[],
+        &[(
+            "complete",
+            json!(false),
+        ), (
+            "incompleteReasons",
+            json!(narrow.incomplete_reasons),
+        )],
+    );
+    expect_control(
+        admit_effect(&mut denied, "EP1", &Effect { operation: "write".into(), target: Some("src/domain/service.ts".into()) }),
+        DenialCode::ContextIncomplete,
+    );
+
+    let mut unsupported = empty_state();
+    add_binding(&mut unsupported, "CB2", json!({ "type": "semantic_similarity", "value": "auth-ish" }));
+    let unresolved = resolve_applicable_context(
+        &unsupported,
+        &ResolverArgs {
+            task_scope_id: None,
+            target_paths: vec!["src/domain/service.ts".into()],
+            revision: None,
+            declared_applicable: vec![],
+            dependency_evidence_id: None,
+        },
+    );
+    assert!(!unresolved.complete);
+    assert!(unresolved
+        .incomplete_reasons
+        .contains(&DenialCode::UnresolvedSelector.as_str().to_string()));
+
+    let mut edge_state = empty_state();
+    edge_state.evidence.insert(
+        "EV-EDGES".into(),
+        evidence_record(
+            "EV-EDGES",
+            &[(
+                "edges",
+                json!([{ "from": "src/domain/a.ts", "to": null, "resolution": "unresolved" }]),
+            )],
+        ),
+    );
+    let unresolved_edge = resolve_applicable_context(
+        &edge_state,
+        &ResolverArgs {
+            task_scope_id: None,
+            target_paths: vec![],
+            revision: Some("rev-b"),
+            declared_applicable: vec![],
+            dependency_evidence_id: Some("EV-EDGES"),
+        },
+    );
+    assert!(!unresolved_edge.complete);
+    assert!(unresolved_edge
+        .incomplete_reasons
+        .contains(&DenialCode::UnresolvedDependencyEdge.as_str().to_string()));
+
+    let missing = resolve_applicable_context(
+        &state,
+        &ResolverArgs {
+            task_scope_id: None,
+            target_paths: vec![],
+            revision: None,
+            declared_applicable: vec![],
+            dependency_evidence_id: None,
+        },
+    );
+    assert!(!missing.complete);
+    assert!(missing
+        .incomplete_reasons
+        .contains(&DenialCode::EvidencePinMismatch.as_str().to_string()));
+
+    state.evidence.insert(
+        "EV-AGENT".into(),
+        {
+            let mut record = evidence_record("EV-AGENT", &[]);
+            record.origin = "agent".into();
+            record
+        },
+    );
+    let agent_supplied = resolve_applicable_context(
+        &state,
+        &ResolverArgs {
+            task_scope_id: None,
+            target_paths: vec![],
+            revision: Some("rev-b"),
+            declared_applicable: vec![],
+            dependency_evidence_id: Some("EV-AGENT"),
+        },
+    );
+    assert!(!agent_supplied.complete);
+    assert!(agent_supplied
+        .incomplete_reasons
+        .contains(&DenialCode::EvidencePinMismatch.as_str().to_string()));
+
+    state.evidence.insert(
+        "EV-OLD".into(),
+        evidence_record(
+            "EV-OLD",
+            &[(
+                "stateRef",
+                json!({ "repository": "repo", "revision": "rev-a", "contentDigest": "digest-a" }),
+            )],
+        ),
+    );
+    let wrong_revision = resolve_applicable_context(
+        &state,
+        &ResolverArgs {
+            task_scope_id: None,
+            target_paths: vec![],
+            revision: Some("rev-b"),
+            declared_applicable: vec![],
+            dependency_evidence_id: Some("EV-OLD"),
+        },
+    );
+    assert!(!wrong_revision.complete);
+    assert!(wrong_revision
+        .incomplete_reasons
+        .contains(&DenialCode::EvidencePinMismatch.as_str().to_string()));
+
+    let positive = resolve_applicable_context(
+        &state,
+        &ResolverArgs {
+            task_scope_id: None,
+            target_paths: vec!["src/domain/service.ts".into()],
+            revision: Some("rev-b"),
+            declared_applicable: vec!["CB1".into()],
+            dependency_evidence_id: Some("EV-OK"),
+        },
+    );
+    assert!(positive.complete);
+    assert_eq!(positive.omitted, Vec::<String>::new());
+    assert_eq!(positive.applicable, vec!["CB1".to_string()]);
+}
+
+#[test]
+fn an_evidence_record_without_a_stateref_cannot_vacuously_pin_a_context() {
+    let mut state = empty_state();
+    let mut no_ref = evidence_record("EV-NOREF", &[]);
+    no_ref.extra.remove("stateRef");
+    state.evidence.insert("EV-NOREF".into(), no_ref);
+    let result = resolve_applicable_context(
+        &state,
+        &ResolverArgs {
+            task_scope_id: None,
+            target_paths: vec![],
+            revision: None,
+            declared_applicable: vec![],
+            dependency_evidence_id: Some("EV-NOREF"),
+        },
+    );
+    assert!(!result.complete);
+    assert!(result
+        .incomplete_reasons
+        .contains(&DenialCode::EvidencePinMismatch.as_str().to_string()));
+}
+
+#[test]
+fn a_fully_pinned_evidence_record_cannot_pin_a_context_when_revision_is_omitted() {
+    let mut state = empty_state();
+    state.evidence.insert("EV-FULL".into(), evidence_record("EV-FULL", &[]));
+    let result = resolve_applicable_context(
+        &state,
+        &ResolverArgs {
+            task_scope_id: None,
+            target_paths: vec![],
+            revision: None,
+            declared_applicable: vec![],
+            dependency_evidence_id: Some("EV-FULL"),
+        },
+    );
+    assert!(!result.complete);
+    assert!(result
+        .incomplete_reasons
+        .contains(&DenialCode::EvidencePinMismatch.as_str().to_string()));
+}
+
+#[test]
+fn evidence_with_edges_but_no_declared_scope_is_refused() {
+    let mut state = empty_state();
+    let mut no_scope = evidence_record("EV-NOSCOPE", &[]);
+    no_scope.extra.remove("extractionScope");
+    state.evidence.insert("EV-NOSCOPE".into(), no_scope);
+    let result = resolve_applicable_context(
+        &state,
+        &ResolverArgs {
+            task_scope_id: None,
+            target_paths: vec!["src/domain/service.ts".into()],
+            revision: Some("rev-b"),
+            declared_applicable: vec![],
+            dependency_evidence_id: Some("EV-NOSCOPE"),
+        },
+    );
+    assert!(!result.complete);
+    assert!(result
+        .incomplete_reasons
+        .contains(&DenialCode::EvidenceScopeMismatch.as_str().to_string()));
+}
+
+#[test]
+fn a_targetpath_outside_the_declared_scope_is_refused() {
+    let mut state = empty_state();
+    state.evidence.insert(
+        "EV-SCOPED".into(),
+        evidence_record("EV-SCOPED", &[("extractionScope", json!({ "fromPrefixes": ["src/domain/"] }))]),
+    );
+    let result = resolve_applicable_context(
+        &state,
+        &ResolverArgs {
+            task_scope_id: None,
+            target_paths: vec!["src/ui/App.tsx".into()],
+            revision: Some("rev-b"),
+            declared_applicable: vec![],
+            dependency_evidence_id: Some("EV-SCOPED"),
+        },
+    );
+    assert!(!result.complete);
+    assert!(result
+        .incomplete_reasons
+        .contains(&DenialCode::EvidenceScopeMismatch.as_str().to_string()));
+}
+
+#[test]
+fn an_evidence_edge_outside_its_own_declared_scope_is_refused() {
+    let mut state = empty_state();
+    state.evidence.insert(
+        "EV-CROSS".into(),
+        evidence_record(
+            "EV-CROSS",
+            &[
+                ("extractionScope", json!({ "fromPrefixes": ["src/domain/"] })),
+                (
+                    "edges",
+                    json!([
+                        { "from": "src/domain/a.ts", "to": "src/ui/Button.tsx", "resolution": "resolved" },
+                        { "from": "src/other/x.ts", "to": "src/ui/Button.tsx", "resolution": "resolved" },
+                    ]),
+                ),
+            ],
+        ),
+    );
+    let result = resolve_applicable_context(
+        &state,
+        &ResolverArgs {
+            task_scope_id: None,
+            target_paths: vec!["src/domain/a.ts".into()],
+            revision: Some("rev-b"),
+            declared_applicable: vec![],
+            dependency_evidence_id: Some("EV-CROSS"),
+        },
+    );
+    assert!(!result.complete);
+    assert!(result
+        .incomplete_reasons
+        .contains(&DenialCode::EvidenceScopeMismatch.as_str().to_string()));
+}
+
+#[test]
+fn verifyextraction_detects_a_cherry_picked_edge_set_by_recomputation() {
+    let mut files = BTreeMap::new();
+    files.insert("src/domain/a.ts".to_string(), "import { b } from \"./b\";\n".to_string());
+    files.insert("src/domain/b.ts".to_string(), "export const b = 1;\n".to_string());
+    files.insert("src/ui/c.tsx".to_string(), "import React from \"react\";\n".to_string());
+    let edges = kraddle::extract::extract_dependencies(&files).edges;
+    let removed: Vec<Value> = edges
+        .iter()
+        .filter(|edge| !(edge.get("from") == Some(&json!("src/domain/a.ts")) && edge.get("to") == Some(&json!("src/domain/b.ts"))))
+        .cloned()
+        .collect();
+    let mut cherry_picked = evidence_record("EV-CHERRY", &[("edges", json!(removed))]);
+    let result = verify_extraction(&cherry_picked, Some(&files));
+    assert_eq!(result.get("verified"), Some(&json!(false)));
+    assert_eq!(
+        result.get("missing"),
+        Some(&json!([{ "from": "src/domain/a.ts", "to": "src/domain/b.ts", "spec": "./b", "resolution": "resolved" }]))
+    );
+    assert_eq!(result.get("extra"), Some(&json!([])));
+
+    cherry_picked.set_field("edges", json!(edges));
+    assert_eq!(verify_extraction(&cherry_picked, Some(&files)), json!({ "verified": true }));
+}
+
+#[test]
+fn scoped_evidence_with_in_scope_targets_and_a_full_edge_set_completes() {
+    let mut state = empty_state();
+    add_binding(&mut state, "CB1", json!({ "type": "path_prefix", "value": "src/domain/" }));
+    state.evidence.insert("EV-OK".into(), evidence_record("EV-OK", &[]));
+    let result = resolve_applicable_context(
+        &state,
+        &ResolverArgs {
+            task_scope_id: None,
+            target_paths: vec!["src/domain/service.ts".into()],
+            revision: Some("rev-b"),
+            declared_applicable: vec!["CB1".into()],
+            dependency_evidence_id: Some("EV-OK"),
+        },
+    );
+    assert!(result.complete);
+    assert_eq!(result.applicable, vec!["CB1".to_string()]);
+
+    let mut files = BTreeMap::new();
+    files.insert("src/domain/a.ts".to_string(), "import { b } from \"./b\";\n".to_string());
+    files.insert("src/domain/b.ts".to_string(), "export const b = 1;\n".to_string());
+    let edges = kraddle::extract::extract_dependencies(&files).edges;
+    let scoped = evidence_record("EV-FULLSET", &[("edges", json!(edges))]);
+    assert_eq!(verify_extraction(&scoped, Some(&files)), json!({ "verified": true }));
 }
 
 #[test]

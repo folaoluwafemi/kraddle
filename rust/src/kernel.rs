@@ -1666,3 +1666,227 @@ where
     }
     record
 }
+
+// ---------------------------------------------------------------------------
+// Applicability resolver: the acting agent cannot choose its own applicable
+// commitments, and the resolver reports incomplete rather than guessing.
+
+const SUPPORTED_SELECTOR_TYPES: [&str; 4] =
+    ["exact_unit_id", "path_prefix", "scope_membership", "relationship_type"];
+
+pub struct ResolverArgs<'a> {
+    pub task_scope_id: Option<&'a str>,
+    pub target_paths: Vec<String>,
+    pub revision: Option<&'a str>,
+    pub declared_applicable: Vec<String>,
+    pub dependency_evidence_id: Option<&'a str>,
+}
+
+pub struct ResolverOutcome {
+    pub complete: bool,
+    pub applicable: Vec<String>,
+    pub omitted: Vec<String>,
+    pub unresolved_selectors: Vec<Value>,
+    pub unresolved_edges: Vec<Value>,
+    pub incomplete_reasons: Vec<String>,
+    pub revision: Option<String>,
+}
+
+/// Port of resolveApplicableContext.
+pub fn resolve_applicable_context(state: &State, args: &ResolverArgs) -> ResolverOutcome {
+    let mut incomplete_reasons: Vec<String> = Vec::new();
+    let mut add_reason = |code: DenialCode, reasons: &mut Vec<String>| {
+        let text = code.as_str().to_string();
+        if !reasons.contains(&text) {
+            reasons.push(text);
+        }
+    };
+    let mut unresolved_selectors: Vec<Value> = Vec::new();
+    let mut unresolved_edges: Vec<Value> = Vec::new();
+    let mut applicable: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+
+    for unit in state.units.values() {
+        if unit.kind != "control_binding" || unit.approval_state != "accepted" {
+            continue;
+        }
+        let selector = profile_role(state, &unit.id, "subject_selector", "commitment")
+            .and_then(|record| record.field("value").cloned());
+        let selector_type = selector
+            .as_ref()
+            .and_then(|s| s.get("type"))
+            .and_then(|t| t.as_str())
+            .map(str::to_string);
+        let selector_type_ok = selector_type
+            .as_deref()
+            .map(|t| SUPPORTED_SELECTOR_TYPES.contains(&t))
+            .unwrap_or(false);
+        if !selector_type_ok {
+            unresolved_selectors.push(json!({
+                "bindingId": unit.id,
+                "selectorType": selector.as_ref().and_then(|s| s.get("type").cloned()).unwrap_or(Value::Null),
+            }));
+            add_reason(DenialCode::UnresolvedSelector, &mut incomplete_reasons);
+            continue;
+        }
+        let selector_type = selector_type.unwrap();
+        let value = selector.and_then(|s| s.get("value").cloned()).unwrap_or(Value::Null);
+        let value_str = value.as_str();
+        let matches = match selector_type.as_str() {
+            "exact_unit_id" => value_str.map(|v| state.units.contains_key(v)).unwrap_or(false),
+            "path_prefix" => value_str
+                .map(|v| args.target_paths.iter().any(|path| path.starts_with(v)))
+                .unwrap_or(false),
+            "scope_membership" => value_str == args.task_scope_id,
+            "relationship_type" => value_str
+                .map(|v| state.relationships.values().any(|edge| edge.str_field("role") == Some(v)))
+                .unwrap_or(false),
+            _ => false,
+        };
+        if matches {
+            applicable.insert(unit.id.clone());
+        }
+    }
+
+    // Dependency edges come from state via pinned extractor evidence, never
+    // from the caller.
+    let evidence = args
+        .dependency_evidence_id
+        .and_then(|id| state.evidence.get(id));
+    let revision_valid = args.revision.map(|r| !r.is_empty()).unwrap_or(false);
+    let pin = evidence.and_then(|e| e.field("stateRef"));
+    let non_empty_str = |value: Option<&Value>| {
+        value.and_then(|v| v.as_str()).map(|s| !s.is_empty()).unwrap_or(false)
+    };
+    let evidence_pinned = revision_valid
+        && evidence.is_some()
+        && evidence.map(|e| e.origin == "extractor").unwrap_or(false)
+        && evidence.map(|e| e.approval_state == "accepted").unwrap_or(false)
+        && non_empty_str(pin.and_then(|p| p.get("repository")))
+        && non_empty_str(pin.and_then(|p| p.get("revision")))
+        && non_empty_str(pin.and_then(|p| p.get("contentDigest")))
+        && pin.and_then(|p| p.get("revision")).and_then(|r| r.as_str()) == args.revision;
+
+    if !evidence_pinned {
+        add_reason(DenialCode::EvidencePinMismatch, &mut incomplete_reasons);
+    } else {
+        let evidence = evidence.unwrap();
+        let edge_list: Vec<Value> = evidence
+            .field("edges")
+            .and_then(|f| f.as_array())
+            .cloned()
+            .unwrap_or_default();
+        let from_prefixes: Vec<String> = evidence
+            .field("extractionScope")
+            .and_then(|s| s.get("fromPrefixes"))
+            .and_then(|f| f.as_array())
+            .map(|list| list.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+            .unwrap_or_default();
+        let scope_declared = !from_prefixes.is_empty();
+        let under_scope = |path: Option<&str>| -> bool {
+            path.map(|p| from_prefixes.iter().any(|prefix| p.starts_with(prefix.as_str())))
+                .unwrap_or(false)
+        };
+        if !edge_list.is_empty() && !scope_declared {
+            add_reason(DenialCode::EvidenceScopeMismatch, &mut incomplete_reasons);
+        } else if scope_declared {
+            if !args.target_paths.iter().all(|path| under_scope(Some(path))) {
+                add_reason(DenialCode::EvidenceScopeMismatch, &mut incomplete_reasons);
+            }
+            if edge_list
+                .iter()
+                .any(|edge| !under_scope(edge.get("from").and_then(|f| f.as_str())))
+            {
+                add_reason(DenialCode::EvidenceScopeMismatch, &mut incomplete_reasons);
+            }
+        }
+        for edge in &edge_list {
+            let resolution = edge.get("resolution").and_then(|r| r.as_str());
+            if resolution == Some("ambiguous") || resolution == Some("unresolved") {
+                unresolved_edges.push(json!({
+                    "from": edge.get("from").cloned().unwrap_or(Value::Null),
+                    "to": edge.get("to").cloned().unwrap_or(Value::Null),
+                    "resolution": edge.get("resolution").cloned().unwrap_or(Value::Null),
+                }));
+                add_reason(DenialCode::UnresolvedDependencyEdge, &mut incomplete_reasons);
+            }
+        }
+    }
+
+    let omitted: Vec<String> = applicable
+        .iter()
+        .filter(|binding_id| !args.declared_applicable.contains(binding_id))
+        .cloned()
+        .collect();
+    if !omitted.is_empty() {
+        add_reason(DenialCode::OmittedApplicableCommitment, &mut incomplete_reasons);
+    }
+
+    ResolverOutcome {
+        complete: incomplete_reasons.is_empty(),
+        applicable: applicable.into_iter().collect(),
+        omitted,
+        unresolved_selectors,
+        unresolved_edges,
+        incomplete_reasons,
+        revision: args.revision.map(str::to_string),
+    }
+}
+
+/// Port of verifyExtraction: re-runs extraction and diffs against the
+/// evidence's declared scope — cherry-picked evidence is detectable.
+pub fn verify_extraction(evidence: &Record, files: Option<&std::collections::BTreeMap<String, String>>) -> Value {
+    let from_prefixes: Vec<String> = evidence
+        .field("extractionScope")
+        .and_then(|s| s.get("fromPrefixes"))
+        .and_then(|f| f.as_array())
+        .map(|list| list.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+        .unwrap_or_default();
+    let under_scope = |path: Option<&str>| -> bool {
+        path.map(|p| from_prefixes.iter().any(|prefix| p.starts_with(prefix.as_str())))
+            .unwrap_or(false)
+    };
+    let key = |from: &Value, to: &Value, spec: &Value, resolution: &Value| -> String {
+        serde_json::to_string(&json!([from, to, spec, resolution])).unwrap_or_default()
+    };
+    let project = |edge: &Value| -> (String, Value) {
+        let from = edge.get("from").cloned().unwrap_or(Value::Null);
+        let to = edge.get("to").cloned().unwrap_or(Value::Null);
+        let spec = edge.get("spec").cloned().unwrap_or(Value::Null);
+        let resolution = edge.get("resolution").cloned().unwrap_or(Value::Null);
+        let key = key(&from, &to, &spec, &resolution);
+        (key, json!({ "from": from, "to": to, "spec": spec, "resolution": resolution }))
+    };
+    let declared: Vec<(String, Value)> = evidence
+        .field("edges")
+        .and_then(|f| f.as_array())
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .filter(|edge| under_scope(edge.get("from").and_then(|f| f.as_str())))
+        .map(|edge| project(edge))
+        .collect();
+    let empty_files = std::collections::BTreeMap::new();
+    let files = files.unwrap_or(&empty_files);
+    let computed: Vec<(String, Value)> = crate::extract::extract_dependencies(files)
+        .edges
+        .iter()
+        .filter(|edge| under_scope(edge.get("from").and_then(|f| f.as_str())))
+        .map(|edge| project(edge))
+        .collect();
+    let declared_keys: std::collections::BTreeSet<&String> = declared.iter().map(|(k, _)| k).collect();
+    let computed_keys: std::collections::BTreeSet<&String> = computed.iter().map(|(k, _)| k).collect();
+    let missing: Vec<Value> = computed
+        .iter()
+        .filter(|(k, _)| !declared_keys.contains(k))
+        .map(|(_, v)| v.clone())
+        .collect();
+    let extra: Vec<Value> = declared
+        .iter()
+        .filter(|(k, _)| !computed_keys.contains(k))
+        .map(|(_, v)| v.clone())
+        .collect();
+    if !missing.is_empty() || !extra.is_empty() {
+        return json!({ "verified": false, "missing": missing, "extra": extra });
+    }
+    json!({ "verified": true })
+}
