@@ -16,6 +16,16 @@ const EVALUATION_RESULTS = new Set([
 
 const digest = (value) => createHash("sha256").update(value).digest("hex");
 
+// Canonical JSON for cross-implementation digest parity: object keys sorted
+// (byte-wise), arrays in order, scalars per JSON.stringify. Matches the
+// default serialization of Rust's serde_json (BTreeMap key ordering).
+function canonicalJson(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  const keys = Object.keys(value).sort();
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+}
+
 export class ControlDenial extends Error {
   constructor(code, detail = {}) {
     super(`${code}: ${JSON.stringify(detail)}`);
@@ -769,7 +779,7 @@ export class Workspace {
         }
         if (commit === null) {
           quarantine = { file, code: DENIAL.SEGMENT_COMMIT_MARKER_MISSING, index: projectedThrough };
-        } else if (digest(JSON.stringify(operations)) !== commit.operationsDigest) {
+        } else if (digest(canonicalJson(operations)) !== commit.operationsDigest) {
           quarantine = { file, code: DENIAL.SEGMENT_DIGEST_MISMATCH, index: projectedThrough };
         }
         if (quarantine) break;
@@ -818,7 +828,7 @@ export class Workspace {
         value: {
           transactionId,
           actorId,
-          operationsDigest: digest(JSON.stringify(prepared)),
+          operationsDigest: digest(canonicalJson(prepared)),
           profileIds,
         },
       };
