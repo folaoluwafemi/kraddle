@@ -1,3 +1,4 @@
+pub mod cli;
 pub mod denials_text;
 pub mod evaluators;
 pub mod extract;
