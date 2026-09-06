@@ -173,7 +173,7 @@ fn node_bootstraps_rust_reads_and_refuses_reentry() {
     let temp = TempDir::new("kraddle-diff-node");
     let repo = make_fixture_repo(&temp.0);
     let repo_str = repo.to_string_lossy().to_string();
-    let cli_js = repo_root().join("src").join("cli.js");
+    let cli_js = repo_root().join("archive").join("node-implementation").join("src").join("cli.js");
 
     // 1. Node bootstraps: init, rule add, episode start.
     let (code, output, stderr) = run_capture(Command::new("node").arg(&cli_js).args(["init", "--repo", &repo_str]));
@@ -196,7 +196,7 @@ fn node_bootstraps_rust_reads_and_refuses_reentry() {
 
     // 2. One admitted write through the NODE server: the ledger Node
     //    writes is the thing Rust must read.
-    let server_js = repo_root().join("src").join("server.js");
+    let server_js = repo_root().join("archive").join("node-implementation").join("src").join("server.js");
     let mut node_server = Command::new("node");
     node_server.arg(&server_js);
     node_server
@@ -259,7 +259,7 @@ fn rust_bootstraps_node_reads_and_refuses_reentry() {
     let temp = TempDir::new("kraddle-diff-rust");
     let repo = make_fixture_repo(&temp.0);
     let repo_str = repo.to_string_lossy().to_string();
-    let cli_js = repo_root().join("src").join("cli.js");
+    let cli_js = repo_root().join("archive").join("node-implementation").join("src").join("cli.js");
     let kraddle_bin = env!("CARGO_BIN_EXE_kraddle");
 
     // 1. Rust bootstraps: init, rule add, episode start.
@@ -305,7 +305,7 @@ fn rust_bootstraps_node_reads_and_refuses_reentry() {
     //    forces the identical refusal.
     let (code, _stdout, stderr) = run_capture(
         Command::new("node")
-            .arg(repo_root().join("src").join("server.js"))
+            .arg(repo_root().join("archive").join("node-implementation").join("src").join("server.js"))
             .env("KRADDLE_REPO", &repo)
             .env("KRADDLE_WORKSPACE_DIR", &repo)
             .env("KRADDLE_EPISODE_ID", &env["KRADDLE_EPISODE_ID"])

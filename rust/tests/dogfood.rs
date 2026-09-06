@@ -1,5 +1,15 @@
 //! Port of test/dogfood.test.js — Kraddle's own rules governing Kraddle's
-//! own source, against THIS repository.
+//! own source.
+//!
+//! RETARGETED after the Node implementation was archived to
+//! `archive/node-implementation/` (the live implementation is `rust/`).
+//! The Phase 1 regex extractor understands only JavaScript import
+//! syntax, so `rust/src/*.rs` yields no extractable edges and the
+//! archived Node tree remains the only real-code corpus the extractor
+//! can honestly read. DEBT: when a Rust-import extractor exists,
+//! retarget this suite to `rust/src/` with prefixes `rust/src/` and
+//! `rust/tests/`. Until then this suite proves the control loop over
+//! the archived implementation's real source.
 
 mod common;
 
@@ -14,11 +24,12 @@ use kraddle::report::extraction_report;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
-fn repo_root() -> std::path::PathBuf {
+fn scan_root() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("rust dir has a parent")
-        .to_path_buf()
+        .join("archive")
+        .join("node-implementation")
 }
 
 // "kernel code must not import test or doc code", combined inline from two
@@ -37,11 +48,11 @@ fn evaluate_dogfood_rule(files: &BTreeMap<String, String>) -> String {
 
 #[test]
 fn the_dogfood_gate_kraddle_src_imports_neither_its_tests_nor_its_docs() {
-    let root = repo_root();
+    let root = scan_root();
     let files = read_repo_files(&root).expect("read repo").files;
     let git = git_state_ref(&root).expect("git state");
     let state_ref = json!({
-        "repository": git.repository,
+        "repository": format!("{}-archive", git.repository),
         "revision": git.revision,
         "contentDigest": compute_file_map_digest(&files),
     });
@@ -79,11 +90,11 @@ fn the_dogfood_gate_kraddle_src_imports_neither_its_tests_nor_its_docs() {
 
 #[test]
 fn the_dogfood_episode_closes_on_real_state() {
-    let root = repo_root();
+    let root = scan_root();
     let files = read_repo_files(&root).expect("read repo").files;
     let git = git_state_ref(&root).expect("git state");
     let state_ref = json!({
-        "repository": git.repository,
+        "repository": format!("{}-archive", git.repository),
         "revision": git.revision,
         "contentDigest": compute_file_map_digest(&files),
     });

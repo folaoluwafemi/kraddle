@@ -36,24 +36,31 @@ Maturity labels used throughout the project:
 | **Implemented** | Working software exists |
 | **Verified** | Conformance tests establish the implementation's behavior |
 
-## Quickstart (local, hand-installed)
+## Quickstart (Rust binary)
 
-Requirements: Node >= 20, git on PATH. No dependencies to install.
+Requirements: Rust 1.98+ (stable), git on PATH. Build once, no runtime dependencies.
 
-1. Clone the repository and run `npm install` (there are no runtime dependencies; this only satisfies tooling expectations).
+1. Build the binaries:
+
+   ```sh
+   cd rust
+   cargo build --release
+   ```
+
+   This produces `rust/target/release/kraddle.exe` (human channel) and `rust/target/release/kraddle-mcp-server.exe` (agent surface). All commands below assume you are in the repository you want to govern; pass `--repo <dir>` otherwise.
 
 2. Create a workspace for your repository:
 
    ```sh
-   node src/cli.js init
+   kraddle init
    ```
 
-   This creates `.kraddle/` in the current directory (run it from your repo root, or pass `--repo <dir>`).
+   This creates `.kraddle/` in the current directory and refuses to overwrite one that already exists.
 
 3. Declare one rule, in your own words:
 
    ```sh
-   node src/cli.js rule add --source src/domain --forbid src/ui \
+   kraddle rule add --source src/domain --forbid src/ui \
      --text "domain must not import ui"
    ```
 
@@ -62,14 +69,14 @@ Requirements: Node >= 20, git on PATH. No dependencies to install.
 4. Launch an episode for your agent:
 
    ```sh
-   node src/cli.js episode start --task "add a small domain service" \
+   kraddle episode start --task "add a small domain service" \
      --write-prefix src/domain
    ```
 
-   The command prints four environment variables. Paste them and start the MCP server:
+   The command prints four environment variables. Start the MCP server with them:
 
    ```sh
-   npm start
+   kraddle-mcp-server
    ```
 
 5. Point any MCP client at the server over stdio. The agent sees exactly three tools: read a file, write a file, request episode closure.
@@ -80,6 +87,8 @@ Requirements: Node >= 20, git on PATH. No dependencies to install.
    - If the agent changes files outside the tool (directly on disk), closing the episode is **refused** and the changed paths are named.
 
 What Kraddle is *not* doing here: there is no sandbox and no enforced perimeter. An agent can still write files directly; Kraddle denies admission for violating writes, refuses to record unadmitted changes as controlled execution, and offers no tool that can weaken the governing rule. It detects and refuses — it does not prevent. See the maturity table above for what is verified versus specified.
+
+The original Node implementation is archived at `archive/node-implementation/` (reference only; the Rust port proved byte-level format compatibility with it).
 
 ## The Problem
 
