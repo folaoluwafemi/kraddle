@@ -137,7 +137,7 @@ I should commit this decision") routes through this channel.
 ## 5. Sequencing (locked)
 
 ```text
-NOW      Rust rewrite (contexts/rust_rewrite_plan_2026-09-04.md).
+NOW      Rust rewrite (knowledge_base/rust_rewrite_plan_2026-09-04.md).
          Translation only. No propose tool, no acceptance changes
          during the port. Parity is the bar.
 

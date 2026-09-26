@@ -55,7 +55,7 @@ A6  src/kernel.js:714-749 transact() has no serialization. Two concurrent
 
 ## 1. Guardrails
 
-Phase 0 plan guardrails G1-G10 (`contexts/phase0_implementation_plan_2026-09-02.md`)
+Phase 0 plan guardrails G1-G10 (`knowledge_base/phase0_implementation_plan_2026-09-02.md`)
 remain in force. Restating the critical five:
 
 ```text
@@ -64,7 +64,7 @@ G1  Never weaken an assertion or fixture to make a test pass.
     and only in the strengthening direction.
 G3  Denial is the default. If unsure, deny.
 G4  Assert on ControlDenial.code, never message text.
-G5  Write only to src/ and test/. Never touch docs/, contexts/, README.md.
+G5  Write only to src/ and test/. Never touch docs/, knowledge_base/, README.md.
 G10 One commit per completed step, message "step N: <what>".
 ```
 

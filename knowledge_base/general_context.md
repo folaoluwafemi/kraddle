@@ -1,8 +1,8 @@
 # General context
 
-Garry Tan: The future is personal agi [youtube video](C:\Users\USER\StudioProjects\ogment_inc\kraddle\contexts/garry_tan-the_future_of_agi_is_personal.md)
+Garry Tan: The future is personal agi [youtube video](C:\Users\USER\StudioProjects\ogment_inc\kraddle\knowledge_base/garry_tan-the_future_of_agi_is_personal.md)
 
-Uncle bob: on testing ai code [youtube video](C:\Users\USER\StudioProjects\ogment_inc\kraddle\contexts/uncle_bob_on_testing_ai_code.md)
+Uncle bob: on testing ai code [youtube video](C:\Users\USER\StudioProjects\ogment_inc\kraddle\knowledge_base/uncle_bob_on_testing_ai_code.md)
 
 A tweet by one Daniel Steigerwald
 ```md

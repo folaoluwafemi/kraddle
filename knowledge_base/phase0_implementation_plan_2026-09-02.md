@@ -113,7 +113,7 @@ G4  Never assert on human-readable error message text.
     Assert only on ControlDenial.code. Message text may change freely.
 
 G5  Do not create files other than those listed in a step's FILES section.
-    Do not modify README.md, DESIGN.md, docs/, or any file in contexts/.
+    Do not modify README.md, DESIGN.md, docs/, or any file in knowledge_base/.
 
 G6  Do not add exported symbols that no step asks for.
     The export surface is a contract. Extra capability is scope creep.
