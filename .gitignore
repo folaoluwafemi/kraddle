@@ -1,3 +1,2 @@
 .kraddle/
-package-lock.json
 rust/target/

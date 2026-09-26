@@ -1,8 +1,0 @@
-{
-  "name": "kraddle",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "docs": "node docs/serve.js"
-  }
-}
