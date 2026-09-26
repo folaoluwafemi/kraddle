@@ -3,574 +3,70 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="The Kraddle Format documentation." />
-    <title>Kraddle Format</title>
+    <meta name="description" content="Kraddle — Local-first semantic control system for software." />
+    <title>Kraddle — Semantic Control Plane for AI Software</title>
+
+    <!-- Theme Initialization Script (Prevents flash of unstyled theme) -->
+    <script>
+      (function () {
+        const saved = localStorage.getItem('kraddle-theme');
+        if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      })();
+    </script>
+    
+    <!-- Google Fonts: Newsreader (Editorial Serif), Geist (Prose), Geist Mono (Code) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Tailwind CDN for layout utilities -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              canvas: 'var(--canvas)',
+              'canvas-dark': 'var(--canvas-dark)',
+              surface: 'var(--surface)',
+              'surface-elevated': 'var(--surface-elevated)',
+              'surface-code': 'var(--surface-code)',
+              mint: 'var(--mint)',
+              'mint-deep': 'var(--mint-deep)',
+              'mint-soft': 'var(--mint-soft)',
+              ink: 'var(--ink)',
+              charcoal: 'var(--charcoal)',
+              steel: 'var(--steel)',
+              muted: 'var(--muted)',
+              hairline: 'var(--hairline)',
+              'hairline-strong': 'var(--hairline-strong)',
+              'hairline-dark': 'var(--hairline-dark)',
+            },
+            fontFamily: {
+              serif: ['"Arizona Flare"', '"Domaine Display"', 'Newsreader', 'Georgia', 'serif'],
+              sans: ['Geist', 'Inter', '-apple-system', 'sans-serif'],
+              mono: ['"Geist Mono"', 'SFMono-Regular', 'Consolas', 'monospace'],
+            },
+          },
+        },
+      };
+    </script>
+
+    <!-- Mintlify & Qel Stylesheet -->
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body>
-    <header class="topbar">
-      <a class="brand" href="#overview" aria-label="Kraddle Format home">
-        <span class="brand-mark"><span></span><span></span><span></span></span>
-        <span>kraddle</span>
-        <span class="format-label">FORMAT</span>
-      </a>
-      <button class="search-trigger" id="searchTrigger" type="button">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" /></svg>
-        <span>Search documentation</span>
-        <kbd>Ctrl K</kbd>
-      </button>
-      <nav class="top-links" aria-label="Primary">
-        <a href="#format">Format v0</a>
-        <a class="button" href="#quickstart">Quickstart</a>
-      </nav>
-      <button class="menu-button" id="menuButton" aria-label="Open navigation" aria-expanded="false">
-        <span></span><span></span><span></span>
-      </button>
-    </header>
+  <body class="bg-canvas text-charcoal font-sans antialiased selection:bg-mint/25 selection:text-ink">
+    <div id="app"></div>
 
-    <div class="docs-shell">
-      <aside class="sidebar" id="sidebar">
-        <nav aria-label="Documentation">
-          <p class="nav-heading">START HERE</p>
-          <a class="nav-link active" href="#overview">Overview</a>
-          <a class="nav-link" href="#quickstart">Quickstart</a>
-          <a class="nav-link" href="#testing-guide">Testing guide</a>
-
-          <p class="nav-heading">CORE CONCEPTS</p>
-          <a class="nav-link" href="#meaning-model">Meaning model</a>
-          <a class="nav-link" href="#truth">Truth and evidence</a>
-          <a class="nav-link" href="#identity">Identity and scope</a>
-
-          <p class="nav-heading">ARCHITECTURE</p>
-          <a class="nav-link" href="#terminology">Terminology map</a>
-          <a class="nav-link" href="#planes">Architectural planes</a>
-          <a class="nav-link" href="#profiles">Profile catalog</a>
-          <a class="nav-link" href="#profile-definition">Profile definition</a>
-          <a class="nav-link" href="#precision">Precision gradient</a>
-          <a class="nav-link" href="#compiler">Meaning compiler</a>
-          <a class="nav-link" href="#design-work">Remaining design work</a>
-          <a class="nav-link" href="#adversarial">Adversarial checks</a>
-
-          <p class="nav-heading">FORMAT SPECIFICATION</p>
-          <a class="nav-link" href="#format">Directory layout</a>
-          <a class="nav-link" href="#records">Records</a>
-          <a class="nav-link" href="#relationships">Relationships</a>
-          <a class="nav-link" href="#events">Events and history</a>
-          <a class="nav-link" href="#encoding">Binary encoding</a>
-          <a class="nav-link" href="#indexes">Objects and indexes</a>
-
-          <p class="nav-heading">OPERATIONS</p>
-          <a class="nav-link" href="#extraction">Extraction</a>
-          <a class="nav-link" href="#synchronization">Synchronization</a>
-          <a class="nav-link" href="#control-loop">Closed control loop</a>
-          <a class="nav-link" href="#invariants">Format invariants</a>
-        </nav>
-      </aside>
-
-      <main class="content">
-        <section class="doc-section hero-section" id="overview" data-title="Overview">
-          <p class="eyebrow">KRADDLE FORMAT / OVERVIEW</p>
-          <div class="version-badge"><span></span> Alpha specification</div>
-          <h1>Keep software connected to what it means.</h1>
-          <p class="lead">The Kraddle Format is a project-native, database-free structure for recording what software does, what it is for, what it must preserve, and how every part relates.</p>
-
-          <div class="note">
-            <span class="note-icon">i</span>
-            <div><strong>Early specification</strong><p>The semantic model is the focus. Byte-level assignments may change before the first implementation.</p></div>
-          </div>
-
-          <div class="meaning-flow" aria-label="Meaning reconciliation flow">
-            <div><span class="flow-index">01</span><strong>Intent</strong><small>What should exist</small></div>
-            <span class="flow-arrow">→</span>
-            <div><span class="flow-index">02</span><strong>Meaning</strong><small>What must be true</small></div>
-            <span class="flow-arrow">→</span>
-            <div><span class="flow-index">03</span><strong>Software</strong><small>What is built</small></div>
-            <span class="flow-arrow">→</span>
-            <div><span class="flow-index">04</span><strong>Evidence</strong><small>What became true</small></div>
-          </div>
-
-          <h2 id="why">Why it exists</h2>
-          <p>Software meaning is usually fragmented across source code, tests, product documents, design files, commit history, conversations, and human memory. Kraddle gives those pieces a shared structure that travels with the project.</p>
-
-          <div class="card-grid">
-            <article class="feature-card"><span class="card-number">01</span><h3>What does it do?</h3><p>Inputs, outputs, effects, states, and observed behavior.</p></article>
-            <article class="feature-card"><span class="card-number">02</span><h3>What is it for?</h3><p>The purpose, capability, or user outcome a unit serves.</p></article>
-            <article class="feature-card"><span class="card-number">03</span><h3>What must it preserve?</h3><p>Constraints, contracts, invariants, and experience qualities.</p></article>
-            <article class="feature-card"><span class="card-number">04</span><h3>How does it relate?</h3><p>Vertical realization and horizontal collaboration across the system.</p></article>
-          </div>
-
-          <h2 id="principles">Design principles</h2>
-          <ol class="principle-list">
-            <li><strong>Project-native.</strong><span>Meaning lives in <code>.kraddle/</code> and travels with the project.</span></li>
-            <li><strong>Database-free.</strong><span>Canonical state, indexes, history, and synchronization are file-native.</span></li>
-            <li><strong>Local-first.</strong><span>Every operation works without a network connection.</span></li>
-            <li><strong>Evidence-backed.</strong><span>Observed facts, interpretations, and commitments remain distinct.</span></li>
-            <li><strong>Compact but recoverable.</strong><span>Normal storage is binary; readable export is always available.</span></li>
-          </ol>
-        </section>
-
-        <section class="doc-section" id="quickstart" data-title="Quickstart">
-          <p class="eyebrow">START HERE</p>
-          <h1>Quickstart</h1>
-          <p class="lead">Install Kraddle, declare one rule in your own words, and let your agent work inside it.</p>
-          <div class="note"><span class="note-icon">i</span><div><strong>Requirements.</strong><p>Node 20 or newer, git on PATH, an MCP-capable agent client. No runtime dependencies. Commands below use <code>node src/cli.js</code>; run <code>npm link</code> once to get the shorter <code>kraddle</code> command.</p></div></div>
-          <div class="steps">
-            <article><span>1</span><div><h3>Install</h3><p>Clone the repository and run npm install inside it. There is nothing else to install.</p><pre><code>git clone &lt;kraddle-repo-url&gt; kraddle
-cd kraddle
-npm install</code><button class="copy-button" aria-label="Copy code">Copy</button></pre></div></article>
-            <article><span>2</span><div><h3>Initialize the workspace</h3><p>From your own repository root, create the Kraddle workspace. This creates <code>.kraddle/</code> and refuses to overwrite one that already exists.</p><pre><code>cd /path/to/your/repo
-node /path/to/kraddle/src/cli.js init</code><button class="copy-button" aria-label="Copy code">Copy</button></pre></div></article>
-            <article><span>3</span><div><h3>Declare one rule</h3><p>Use your own sentence. The rule is pinned to your current git revision and the dependency evidence extracted at that revision.</p><pre><code>node /path/to/kraddle/src/cli.js rule add \
-  --source src/domain \
-  --forbid src/ui \
-  --text "domain must not import ui"</code><button class="copy-button" aria-label="Copy code">Copy</button></pre></div></article>
-            <article><span>4</span><div><h3>Launch an episode</h3><p>This prints four environment variables. Save them — the server needs all four.</p><pre><code>node /path/to/kraddle/src/cli.js episode start \
-  --task "add a small domain service" \
-  --write-prefix src/domain</code><button class="copy-button" aria-label="Copy code">Copy</button></pre></div></article>
-            <article><span>5</span><div><h3>Start the agent surface</h3><p>Export the four printed variables, then start the server. It validates the episode, the authority, and that your working tree still matches the pinned state before it serves anything.</p><pre><code>export KRADDLE_REPO=/path/to/your/repo \
-       KRADDLE_WORKSPACE_DIR=/path/to/your/repo \
-       KRADDLE_EPISODE_ID=&lt;printed-id&gt; \
-       KRADDLE_BASE_EVIDENCE_ID=&lt;printed-id&gt;
-cd /path/to/kraddle
-npm start</code><button class="copy-button" aria-label="Copy code">Copy</button></pre></div></article>
-            <article><span>6</span><div><h3>Point your agent at it</h3><p>The server speaks MCP over stdio. Most clients accept this shape:</p><pre><code>{
-  "mcpServers": {
-    "kraddle": {
-      "command": "node",
-      "args": ["/path/to/kraddle/src/server.js"],
-      "env": {
-        "KRADDLE_REPO": "/path/to/your/repo",
-        "KRADDLE_WORKSPACE_DIR": "/path/to/your/repo",
-        "KRADDLE_EPISODE_ID": "printed-id",
-        "KRADDLE_BASE_EVIDENCE_ID": "printed-id"
-      }
-    }
-  }
-}</code><button class="copy-button" aria-label="Copy code">Copy</button></pre></div></article>
-          </div>
-          <h2 id="what-you-should-see">What you should see</h2>
-          <div class="property-table">
-            <div><code>Three tools only</code><span>The agent gets read a file, write a file, and request episode closure. Nothing that can change rules, authority, or records.</span></div>
-            <div><code>Denied with your words</code><span>A write that would violate your rule is denied and your rule text is quoted back. The file is never written.</span></div>
-            <div><code>Closure refused</code><span>If files changed outside the tools — including package.json — closing the episode is refused and the paths are named.</span></div>
-          </div>
-          <div class="warning"><span>!</span><p><strong>What Kraddle is not doing.</strong> There is no sandbox. An agent can still write files directly; Kraddle denies admission for violating writes, refuses to record unadmitted changes as controlled execution, and offers no tool that can weaken the governing rule. It detects and refuses — it does not prevent.</p></div>
-        </section>
-
-        <section class="doc-section" id="testing-guide" data-title="Testing guide">
-          <p class="eyebrow">START HERE</p>
-          <h1>Testing guide</h1>
-          <p class="lead">A scripted way to try Kraddle against your own repository and agent. Set up via the quickstart first, then work through the six scenarios.</p>
-          <h2 id="the-six-scenarios">The six scenarios</h2>
-          <div class="property-table">
-            <div><code>1. Read</code><span>Ask the agent to read a file under your rule's source prefix. <strong>Expected:</strong> content returned, no complaint.</span></div>
-            <div><code>2. Clean write</code><span>Ask the agent to add or edit a file that obeys your rule. <strong>Expected:</strong> admitted with an admission id; the file exists on disk.</span></div>
-            <div><code>3. Rule violation</code><span>Ask the agent to write a file that imports from your forbidden prefix. <strong>Expected:</strong> denied before disk is touched; the denial quotes your rule text.</span></div>
-            <div><code>4. Weaken the rule</code><span>Ask the agent to change or remove the rule so the write passes. <strong>Expected:</strong> it cannot — no such tool exists. If it tampers with <code>.kraddle/</code> directly, the next load quarantines the workspace and the server refuses to serve.</span></div>
-            <div><code>5. Bypass</code><span>Change any file directly on disk — try package.json — without using the tools, then ask the agent to close the episode. <strong>Expected:</strong> closure refused; the changed path is named.</span></div>
-            <div><code>6. Restart</code><span>After admitted writes, start a second server for the same episode. <strong>Expected:</strong> refused — an episode with admitted effects cannot be re-entered from a new process.</span></div>
-          </div>
-          <h2 id="useful-commands">Useful commands</h2>
-          <div class="property-table">
-            <div><code>status</code><span><code>node src/cli.js status [--repo dir]</code> — workspace trust state, declared rules, episodes and their states. Run this after scenario 4 to see the quarantine.</span></div>
-            <div><code>abort</code><span><code>node src/cli.js episode abort &lt;id&gt;</code> — ends an episode you do not want to close.</span></div>
-            <div><code>tests</code><span><code>npm test</code> in the kraddle clone — 101 passing conformance tests, including the full journey this guide describes.</span></div>
-          </div>
-          <h2 id="denials-explained">Denials you may hit</h2>
-          <div class="property-table">
-            <div><code>PREFLIGHT_VIOLATED</code><span>The write breaks your rule. Reword the change, not the rule.</span></div>
-            <div><code>PREFLIGHT_UNKNOWN</code><span>Kraddle could not verify the write — commonly a dynamic <code>import(variable)</code>. Verification failure denies by design; static imports resolve fine.</span></div>
-            <div><code>TARGET_OUTSIDE_AUTHORITY</code><span>The write is outside the write-prefix the episode was started with. Start a wider episode or write elsewhere.</span></div>
-            <div><code>UNCONTROLLED_EFFECT</code><span>Closure found working-tree changes that did not go through the tools. Revert them or take ownership of them outside the episode.</span></div>
-            <div><code>EPISODE_ALREADY_ACTIVE</code><span>An episode with admitted effects cannot be re-entered by a new server process. Start a fresh episode.</span></div>
-            <div><code>EVIDENCE_PIN_MISMATCH</code><span>Your repository changed since the episode started (for example you committed). Start a new episode from the new state.</span></div>
-            <div><code>CONTEXT_INCOMPLETE</code><span>The governing context could not be fully resolved. The denial lists the reasons; nothing proceeds until they are resolved.</span></div>
-          </div>
-          <h2 id="honest-limits">Honest limits</h2>
-          <div class="property-table">
-            <div><code>Perimeter</code><span>Advisory. Kraddle refuses and records; it does not prevent. See the warning in the quickstart.</span></div>
-            <div><code>Extraction</code><span>Regex-based import extraction. Unrecognized or dynamic imports become unknowns that block writes — fail-closed, not silently ignored.</span></div>
-            <div><code>Episodes</code><span>One episode per server run. No multi-episode orchestration yet.</span></div>
-            <div><code>After you commit</code><span>Pinned state is stale the moment you commit or switch branches. Start a new episode.</span></div>
-          </div>
-          <h2 id="what-to-record">What to record</h2>
-          <p>If you are evaluating Kraddle, note four things per session: what you expected when a write was denied; what the denial text made you do next; how you would feel about the agent being unable to edit the rule that governs it; and whether you would install it again (1-5). Verbatim answers are more useful than summaries.</p>
-        </section>
-
-        <section class="doc-section" id="meaning-model" data-title="Meaning model">
-          <p class="eyebrow">CORE CONCEPTS</p>
-          <h1>Meaning model</h1>
-          <p class="lead">Meaning is composed from units, commitments, relationships, evidence, and scopes.</p>
-          <div class="property-table">
-            <div><code>Meaning unit</code><span>Anything Kraddle can discuss, from a product purpose to a function.</span></div>
-            <div><code>Commitment</code><span>What a unit does, is for, must preserve, or becomes in use.</span></div>
-            <div><code>Relationship</code><span>A typed semantic connection between two units.</span></div>
-            <div><code>Evidence</code><span>A source that supports, challenges, or explains meaning.</span></div>
-            <div><code>Scope</code><span>The product, feature, revision, worktree, or alternative where meaning applies.</span></div>
-          </div>
-          <h2 id="composition">Meaning is compositional</h2>
-          <pre><code>product purpose
-  └── realized_by → capability
-        └── realized_by → behavior
-              ├── implemented_by → UI component
-              └── implemented_by → service
-                    └── decomposed_into → function</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
-        </section>
-
-        <section class="doc-section" id="truth" data-title="Truth and evidence">
-          <p class="eyebrow">CORE CONCEPTS</p>
-          <h1>Truth and evidence</h1>
-          <p class="lead">Kraddle never turns a plausible interpretation into an accepted truth silently.</p>
-          <div class="status-list">
-            <div><span class="status observed">observed</span><p>Directly present in code or runtime behavior. For user input, observation establishes that the statement was made, not that its content is true.</p></div>
-            <div><span class="status derived">derived</span><p>Computed from observations using an explicit rule.</p></div>
-            <div><span class="status inferred">inferred</span><p>A plausible interpretation of available evidence.</p></div>
-            <div><span class="status accepted">accepted</span><p>Explicitly approved by an actor or trusted policy.</p></div>
-            <div><span class="status stale">stale</span><p>May no longer describe the referenced revision.</p></div>
-          </div>
-          <div class="warning"><span>!</span><p>Extractors write observations. Agents propose interpretations. Neither may silently create accepted commitments.</p></div>
-        </section>
-
-        <section class="doc-section" id="identity" data-title="Identity and scope">
-          <p class="eyebrow">CORE CONCEPTS</p><h1>Identity and scope</h1>
-          <p class="lead">Meaning survives renamed files, refactored symbols, parallel worktrees, and alternative implementations.</p>
-          <h2 id="anchors">Stable code anchors</h2>
-          <pre><code>repository identity
-language
-symbol kind
-qualified name
-signature fingerprint
-structural fingerprint
-source revision</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
-          <p>After each scan, an anchor remap is marked exact, probable, ambiguous, or broken. Commitments never move across an ambiguous remap without confirmation.</p>
-        </section>
-
-        <section class="doc-section" id="terminology" data-title="Terminology map">
-          <p class="eyebrow">ARCHITECTURE / REFERENCE</p>
-          <h1>Terminology map</h1>
-          <p class="lead">The terms describe different kinds of abstraction. They are not competing names for the same thing.</p>
-          <div class="property-table">
-            <div><code>Format</code><span>The complete normative contract for representing and operating Kraddle meaning.</span></div>
-            <div><code>Kernel</code><span>The five physical primitives everything else is composed from.</span></div>
-            <div><code>Vocabulary</code><span>Named kinds, modalities, relationships, states, and operations.</span></div>
-            <div><code>Profile</code><span>A validated arrangement of kernel records representing one recurring concept.</span></div>
-            <div><code>Envelope</code><span>A profile whose job is to declare a context, resource, or authority boundary.</span></div>
-            <div><code>Event</code><span>An immutable change to canonical state.</span></div>
-            <div><code>Projection</code><span>A task-specific view of canonical meaning for a human or agent.</span></div>
-            <div><code>Plane</code><span>A conceptual subsystem grouped by responsibility. It is not a stored record.</span></div>
-            <div><code>Runtime</code><span>The machinery that resolves, executes, observes, evaluates, and responds.</span></div>
-          </div>
-          <h2 id="hierarchy">How the terms fit</h2>
-          <pre><code>Kraddle Format
-├── Kernel records
-├── Vocabulary
-├── Profile definitions
-│   └── Envelopes are boundary profiles
-├── Events and storage
-├── Projections
-└── Runtime semantics
-
-Planes group runtime responsibilities conceptually.</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
-        </section>
-
-        <section class="doc-section" id="planes" data-title="Architectural planes">
-          <p class="eyebrow">ARCHITECTURE</p><h1>Architectural planes</h1>
-          <p class="lead">A plane is a responsibility boundary, not another primitive or file type.</p>
-          <div class="card-grid">
-            <article class="feature-card"><span class="card-number">01</span><h3>Semantic plane</h3><p>Preserves meaning, relationships, evidence, scope, and history.</p></article>
-            <article class="feature-card"><span class="card-number">02</span><h3>Control plane</h3><p>Resolves applicability, context, authority, proof obligations, and responses.</p></article>
-            <article class="feature-card"><span class="card-number">03</span><h3>Execution and observation</h3><p>Performs bounded actions and emits observations and attestations.</p></article>
-            <article class="feature-card"><span class="card-number">04</span><h3>Evaluation plane</h3><p>Compares resulting reality against commitments and qualifies the result.</p></article>
-          </div>
-          <div class="meaning-flow">
-            <div><span class="flow-index">01</span><strong>Control</strong><small>Authorizes</small></div><span class="flow-arrow">→</span>
-            <div><span class="flow-index">02</span><strong>Execution</strong><small>Acts</small></div><span class="flow-arrow">→</span>
-            <div><span class="flow-index">03</span><strong>Evaluation</strong><small>Judges</small></div><span class="flow-arrow">→</span>
-            <div><span class="flow-index">04</span><strong>Semantic</strong><small>Preserves</small></div>
-          </div>
-        </section>
-
-        <section class="doc-section" id="profiles" data-title="Profile catalog">
-          <p class="eyebrow">ARCHITECTURE</p><h1>Profile catalog</h1>
-          <p class="lead">Profiles standardize important concepts without expanding the five-record kernel.</p>
-          <div class="property-table">
-            <div><code>DecisionProfile</code><span>Choice, rejected alternatives, rationale, assumptions, owner, and reevaluation triggers.</span></div>
-            <div><code>ProtocolProfile</code><span>States, events, transitions, guards, temporal properties, failure, and recovery.</span></div>
-            <div><code>EnvelopeProfile</code><span>Quantitative budget, operating conditions, observation window, and breach behavior.</span></div>
-            <div><code>NegativeKnowledge</code><span>Prohibitions, non-goals, and rejected alternatives with active conditions.</span></div>
-            <div><code>ControlBinding</code><span>Connects a commitment to applicability, evaluation, authority, and response.</span></div>
-            <div><code>ContextEnvelope</code><span>Declares what context is complete for, omitted, stale, or unavailable.</span></div>
-            <div><code>AuthorityGrant</code><span>Declares who may perform which operations over which scopes.</span></div>
-            <div><code>ExecutionEpisode</code><span>One bounded attempt to change reality.</span></div>
-            <div><code>EvaluationProfile</code><span>Qualified result, coverage, evidence, blind spots, and freshness.</span></div>
-            <div><code>ExceptionProfile</code><span>Scoped, authorized, justified, and expiring risk acceptance.</span></div>
-          </div>
-          <div class="note"><span class="note-icon">i</span><div><strong>Current maturity: conceptual</strong><p>The next specification task is the ProfileDefinition metamodel and exact kernel mapping.</p></div></div>
-        </section>
-
-        <section class="doc-section" id="profile-definition" data-title="Profile definition">
-          <p class="eyebrow">ARCHITECTURE / SPECIFICATION</p><h1>Profile definition</h1>
-          <p class="lead">A profile is not a new primitive. It is a validated arrangement of the five kernel records.</p>
-          <pre><code>Profile instance
-  = one root Unit
-  + role-bearing Commitments
-  + role-bearing Relationships
-  + supporting Evidence
-  + one or more Scopes
-
-profile_id = root_unit_id</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
-          <div class="property-table">
-            <div><code>ProfileDefinition</code><span>Versioned schema for a profile's root kind, roles, fields, cardinalities, lifecycle, validation, and projections.</span></div>
-            <div><code>owned</code><span>Created for the profile. History remains after profile deletion.</span></div>
-            <div><code>referenced</code><span>Existing record linked by the profile. The profile cannot delete it.</span></div>
-            <div><code>shared</code><span>Record may participate in multiple profiles, each with explicit scope.</span></div>
-          </div>
-          <h2 id="profile-atomicity">Atomicity</h2>
-          <p>Profile operations append one transaction containing all required kernel changes. Readers see the previous valid profile or the next valid profile, never a half-applied bundle.</p>
-          <pre><code>create_profile → propose → accept → activate
-                                      ↓
-                              complete / supersede / invalidate / abort</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
-          <div class="note"><span class="note-icon">i</span><div><strong>Phase 0 target</strong><p>ControlBinding, EvaluationProfile, and ExecutionEpisode are the first profiles required to prove the model. Their metamodel is specified; implementation is pending.</p></div></div>
-        </section>
-
-        <section class="doc-section" id="precision" data-title="Precision gradient">
-          <p class="eyebrow">ARCHITECTURE</p><h1>Precision gradient</h1>
-          <p class="lead">Meaning becomes only as formal as its risk and control needs require.</p>
-          <ol class="invariant-list">
-            <li><span>R0</span><p><strong>Exploratory.</strong> Feeling, aspiration, or unresolved thought.</p></li>
-            <li><span>R1</span><p><strong>Descriptive.</strong> Scoped human-readable statement.</p></li>
-            <li><span>R2</span><p><strong>Structured.</strong> Typed conditions, effects, thresholds, and exceptions.</p></li>
-            <li><span>R3</span><p><strong>Evaluatable.</strong> A protocol can return a qualified result.</p></li>
-            <li><span>R4</span><p><strong>Executable.</strong> A test, analyzer, monitor, rule, or review procedure exists.</p></li>
-            <li><span>R5</span><p><strong>Enforced.</strong> Failure gates, restricts, blocks, or escalates action.</p></li>
-          </ol>
-          <p>Rigor is independent of truth, approval, satisfaction, freshness, and confidence.</p>
-        </section>
-
-        <section class="doc-section" id="compiler" data-title="Meaning compiler">
-          <p class="eyebrow">ARCHITECTURE</p><h1>Meaning compiler</h1>
-          <p class="lead">The compiler maps consequential meaning to the strongest appropriate evaluator or guardrail.</p>
-          <pre><code>source commitment
-  → operationalization claim
-  → compiler or evaluator adapter
-  → generated or linked control artifact
-  → validation and activation
-  → evidence production
-  → invalidation and recompilation</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
-          <div class="relationship-columns">
-            <article><span class="relation-label">POSSIBLE OUTPUTS</span><h3>Deterministic or runtime</h3><code>type / schema</code><code>architecture rule</code><code>property test</code><code>protocol check</code><code>runtime monitor</code><code>sandbox limit</code></article>
-            <article><span class="relation-label">HUMAN OR HYBRID</span><h3>Judgment protocols</h3><code>review rubric</code><code>scenario checklist</code><code>comparative reference</code><code>sampling policy</code><code>escalation condition</code></article>
-          </div>
-          <div class="warning"><span>!</span><p>The operational proxy never replaces the original meaning. Determinism does not imply soundness, coverage, or continued proxy validity.</p></div>
-        </section>
-
-        <section class="doc-section" id="design-work" data-title="Remaining design work">
-          <p class="eyebrow">ARCHITECTURE / ROADMAP</p><h1>Remaining design work</h1>
-          <p class="lead">Seven dependent specifications turn the current grammar into something implementable and falsifiable.</p>
-          <ol class="principle-list">
-            <li><strong>1. Profile metamodel</strong><span>Define exact mappings, roles, cardinalities, validation, queries, and migrations.</span></li>
-            <li><strong>2. Identity and atomicity</strong><span>Make multi-record profiles visible and synchronized as one valid transaction.</span></li>
-            <li><strong>3. Typed invalidation</strong><span>Separate epistemic, applicability, rationale, authority, realization, selector, and proxy dependencies.</span></li>
-            <li><strong>4. Evaluation lifecycle</strong><span>Specify satisfied, violated, unknown, indeterminate, and evaluation-failed semantics.</span></li>
-            <li><strong>5. Response resolution</strong><span>Resolve what follows violation, unknown state, stale evidence, conflict, or failed evaluation.</span></li>
-            <li><strong>6. Compilation lifecycle</strong><span>Preserve the chain from source meaning to activated guardrail and evidence.</span></li>
-            <li><strong>7. Conformance suite</strong><span>Run a deliberately adversarial closed-loop change and prevent silent control loss.</span></li>
-          </ol>
-          <h2 id="completion-template">Completion template</h2>
-          <p>Each design is complete only when it defines normative semantics, kernel realization, schema, lifecycle, operations, projections, and conformance tests.</p>
-        </section>
-
-        <section class="doc-section" id="adversarial" data-title="Adversarial checks">
-          <p class="eyebrow">ARCHITECTURE / VERIFICATION</p><h1>Adversarial checks</h1>
-          <p class="lead">These checks attack silent control loss, not ordinary happy-path behavior. Nine of fifteen are now executable conformance tests in the Phase 0 runtime.</p>
-          <div class="note"><span class="note-icon">i</span><div><strong>Current maturity: 9 of 15 verified, 6 deferred</strong><p>A Phase 0 runtime exists (<code>src/kernel.js</code>, JSON-lines encoding). AD-01 through AD-05 and AD-10 through AD-13 pass as behavioral conformance tests. AD-06..AD-09, AD-14, AD-15 are deferred with stated blockers (anchor subsystem, capability negotiation, causal heads, exceptions, typed invalidation).</p></div></div>
-          <div class="property-table">
-            <div><code>AD-01</code><span>Narrow context excludes an applicable prohibition → reject or mark incomplete.</span></div>
-            <div><code>AD-02</code><span>Acting agent changes its own architecture rule → deny by authority.</span></div>
-            <div><code>AD-03</code><span>Evaluator fails instead of reporting violation → blocking obligation remains unresolved.</span></div>
-            <div><code>AD-04</code><span>Coverage selector excludes changed files → reject coverage claim.</span></div>
-            <div><code>AD-05</code><span>Evaluation passes at base revision, then code changes → cannot close.</span></div>
-            <div><code>AD-06</code><span>Anchor remap becomes ambiguous → pause affected capability.</span></div>
-            <div><code>AD-07</code><span>Unknown extension carries restrictive control → preserve, but do not authorize.</span></div>
-            <div><code>AD-08</code><span>Offline branch weakens a control binding → block until authorized resolution.</span></div>
-            <div><code>AD-09</code><span>Agent requests exception and continues before authorization → deny effect.</span></div>
-            <div><code>AD-10</code><span>Agent acts first and records episode afterward → classify as uncontrolled.</span></div>
-            <div><code>AD-11</code><span>Required evaluator cannot parse generated code → `evaluation_failed`, never pass.</span></div>
-            <div><code>AD-12</code><span>Profile transaction is interrupted → expose old or new valid state only.</span></div>
-            <div><code>AD-13</code><span>Authority is revoked during execution → deny the next consequential effect.</span></div>
-            <div><code>AD-14</code><span>Exception expires during execution → block or escalate the next effect.</span></div>
-            <div><code>AD-15</code><span>Invalidation propagation is delayed → read-time checks prevent stale authorization.</span></div>
-          </div>
-          <h2 id="adversarial-exit">Exit condition</h2>
-          <p>Kraddle passes the adversarial proof only when no condition is silently omitted, passed, waived, or resolved by the acting agent changing its own governing rules.</p>
-        </section>
-
-        <section class="doc-section" id="format" data-title="Directory layout">
-          <p class="eyebrow">FORMAT SPECIFICATION</p>
-          <h1>Directory layout</h1>
-          <p class="lead">One canonical `.kraddle/` workspace lives beside the code.</p>
-          <pre><code>.kraddle/
-├── manifest.krd       # identity and format version
-├── schema.krd         # vocabulary and relationship types
-├── heads.krd          # current causal event heads
-├── events/            # immutable event segments
-├── objects/           # content-addressed evidence
-├── indexes/           # rebuildable file-native indexes
-└── local/             # device state; never synchronized</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
-          <div class="note green"><span class="note-icon">✓</span><div><strong>No database layer</strong><p>No SQL engine, embedded database, graph database, or database service is part of local or cloud storage.</p></div></div>
-        </section>
-
-        <section class="doc-section" id="records" data-title="Records">
-          <p class="eyebrow">FORMAT SPECIFICATION</p><h1>Records</h1>
-          <p class="lead">All semantic records share a compact envelope and type-specific payload.</p>
-          <div class="property-table typed">
-            <div><code>record_type</code><span class="type">varint</span><span>Payload type from the schema dictionary.</span></div>
-            <div><code>record_id</code><span class="type">id128</span><span>Stable workspace-unique identity.</span></div>
-            <div><code>scope_id</code><span class="type">id128?</span><span>Scope where the record applies.</span></div>
-            <div><code>origin</code><span class="type">enum</span><span>Human, extractor, agent, policy, or import.</span></div>
-            <div><code>epistemic_basis</code><span class="type">enum</span><span>Observed, derived, interpreted, or asserted.</span></div>
-            <div><code>approval_state</code><span class="type">enum</span><span>Proposed, accepted, rejected, or superseded.</span></div>
-            <div><code>freshness_state</code><span class="type">enum</span><span>Current, stale, or expired.</span></div>
-            <div><code>properties</code><span class="type">map</span><span>Type-specific fields encoded by numeric schema IDs.</span></div>
-          </div>
-        </section>
-
-        <section class="doc-section" id="relationships" data-title="Relationships">
-          <p class="eyebrow">FORMAT SPECIFICATION</p><h1>Relationships</h1>
-          <p class="lead">First-class typed connections explain both realization across levels and cooperation among peers.</p>
-          <div class="relationship-columns">
-            <article><span class="relation-label">VERTICAL</span><h3>Across abstraction</h3><code>realized_by</code><code>implemented_by</code><code>decomposed_into</code><code>constrained_by</code><code>verified_by</code></article>
-            <article><span class="relation-label">HORIZONTAL</span><h3>Within a level</h3><code>depends_on</code><code>collaborates_with</code><code>shares_state_with</code><code>precedes</code><code>alternative_to</code><code>conflicts_with</code></article>
-          </div>
-        </section>
-
-        <section class="doc-section" id="events" data-title="Events and history">
-          <p class="eyebrow">FORMAT SPECIFICATION</p><h1>Events and history</h1>
-          <p class="lead">Immutable events are the canonical history. Current views are projections of that history.</p>
-          <pre><code>event_id          globally unique 128-bit ID
-workspace_id      owning workspace
-actor_id          human, device, extractor, or agent
-logical_time      causal ordering clock
-causal_parents    zero or more event IDs
-payload           record operations
-schema_version    encoding schema</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
-          <div class="note"><span class="note-icon">i</span><div><strong>Current maturity: partially implemented</strong><p>The implemented runtime writes JSON-lines event segments with <code>event_id</code>, <code>workspace_id</code>, <code>actor_id</code>, and <code>payload</code>. <code>logical_time</code> and <code>causal_parents</code> are not implemented; ordering is lexical segment order (single writer, single device). Transactions are atomic by rename but not fsync-durable.</p></div></div>
-        </section>
-
-        <section class="doc-section" id="encoding" data-title="Binary encoding">
-          <p class="eyebrow">FORMAT SPECIFICATION</p><h1>Binary encoding</h1>
-          <p class="lead">KRD is a deterministic, framed binary container designed for compactness and forward compatibility.</p>
-          <div class="warning"><span>!</span><p><strong>Conceptual byte layout.</strong> KRD/KRI encoding is not implemented or verified. The semantic metamodel takes priority over binary optimization.</p></div>
-          <div class="byte-layout">
-            <div><span>0–3</span><strong>Magic</strong><code>4B 52 44 00</code></div>
-            <div><span>4</span><strong>Major</strong><code>uint8</code></div>
-            <div><span>5</span><strong>Minor</strong><code>uint8</code></div>
-            <div><span>6–7</span><strong>Flags</strong><code>uint16</code></div>
-            <div><span>8–23</span><strong>Workspace ID</strong><code>id128</code></div>
-            <div><span>24–31</span><strong>Header length</strong><code>uint64</code></div>
-          </div>
-          <p>Frames are length-prefixed and checksummed. Readers can skip unknown optional frames without understanding them.</p>
-        </section>
-
-        <section class="doc-section" id="indexes" data-title="Objects and indexes">
-          <p class="eyebrow">FORMAT SPECIFICATION</p><h1>Objects and indexes</h1>
-          <p class="lead">Store large evidence once and query connected meaning through disposable file-native indexes.</p>
-          <div class="property-table">
-            <div><code>units.kri</code><span>Record ID to latest projected record and event.</span></div>
-            <div><code>edges.kri</code><span>Unit ID and relationship type to neighboring IDs.</span></div>
-            <div><code>text.kri</code><span>Search tokens to matching unit and commitment IDs.</span></div>
-            <div><code>anchors.kri</code><span>Artifact anchors to meaning unit IDs.</span></div>
-            <div><code>events.kri</code><span>Event IDs to segment byte offsets.</span></div>
-          </div>
-        </section>
-
-        <section class="doc-section" id="extraction" data-title="Extraction">
-          <p class="eyebrow">OPERATIONS</p><h1>Extraction</h1>
-          <p class="lead">Turn code, documents, tests, and runtime behavior into evidence-backed observations.</p>
-          <div class="pipeline"><span>Discover</span><i>→</i><span>Parse</span><i>→</i><span>Analyze</span><i>→</i><span>Anchor</span><i>→</i><span>Observe</span><i>→</i><span>Confirm</span></div>
-        </section>
-
-        <section class="doc-section" id="synchronization" data-title="Synchronization">
-          <p class="eyebrow">OPERATIONS</p><h1>Synchronization</h1>
-          <p class="lead">Replicate immutable event frames and referenced objects without requiring a central service.</p>
-          <ol class="principle-list compact">
-            <li><strong>Exchange heads.</strong><span>Compare causal event heads and format capabilities.</span></li>
-            <li><strong>Transfer gaps.</strong><span>Send missing frames and referenced content-addressed objects.</span></li>
-            <li><strong>Verify.</strong><span>Check event identities, causal parents, and checksums.</span></li>
-            <li><strong>Project.</strong><span>Update current views and rebuild affected index runs.</span></li>
-          </ol>
-        </section>
-
-        <section class="doc-section" id="control-loop" data-title="Closed control loop">
-          <p class="eyebrow">OPERATIONS</p><h1>Closed control loop</h1>
-          <p class="lead">Meaning governs one bounded act, evidence qualifies the result, and response closes or redirects the loop.</p>
-          <pre><code>human intent
-  → semantic model
-  → accepted commitment
-  → control binding
-  → context and authority envelope
-  → execution episode
-  → observation
-  → evaluation
-  → response
-  → invalidation and reevaluation
-  → reconciled meaning and reality</code><button class="copy-button" aria-label="Copy code">Copy</button></pre>
-          <div class="status-list">
-            <div><span class="status accepted">satisfied</span><p>The declared evaluator established the commitment within its coverage boundary.</p></div>
-            <div><span class="status stale">violated</span><p>Current evidence establishes a contradiction.</p></div>
-            <div><span class="status inferred">unknown</span><p>No current evaluation establishes a result.</p></div>
-            <div><span class="status derived">indeterminate</span><p>Available evidence cannot support a decisive result.</p></div>
-            <div><span class="status stale">evaluation_failed</span><p>The required evaluator could not complete correctly. This is never a pass.</p></div>
-          </div>
-        </section>
-
-        <section class="doc-section" id="invariants" data-title="Format invariants">
-          <p class="eyebrow">REFERENCE</p><h1>Format invariants</h1>
-          <p class="lead">Rules every conforming Kraddle implementation must preserve.</p>
-          <ol class="invariant-list">
-            <li><span>01</span><p><code>.kraddle/</code> is the canonical source of project meaning.</p></li>
-            <li><span>02</span><p>Canonical and derived storage use no database engine or service.</p></li>
-            <li><span>03</span><p>Inferred meaning never becomes accepted without an explicit actor or policy.</p></li>
-            <li><span>04</span><p>Every observation names its source revision and extractor version.</p></li>
-            <li><span>05</span><p>Conflicting accepted meaning is never silently discarded.</p></li>
-            <li><span>06</span><p>Indexes are rebuildable and contain no unique meaning.</p></li>
-            <li><span>07</span><p>Approval, evaluation, freshness, epistemic basis, rigor, and confidence remain independent.</p></li>
-            <li><span>08</span><p>Every controlled execution declares scope, base revision, effects, and delegated authority.</p></li>
-            <li><span>09</span><p>An actor cannot alter its governing controls without explicit delegated authority.</p></li>
-            <li><span>10</span><p>Stale inputs invalidate dependent evaluations and context envelopes.</p></li>
-            <li><span>11</span><p>Exceptions preserve rationale, authority, scope, compensating controls, and expiration.</p></li>
-            <li><span>12</span><p>Completion requires evidence for every declared proof obligation.</p></li>
-            <li><span>13</span><p>No result is called successful when a required evaluator failed or did not run.</p></li>
-            <li><span>14</span><p>Every context completeness claim discloses omissions, unavailable sources, and blind spots.</p></li>
-          </ol>
-        </section>
-
-        <footer class="doc-footer">
-          <div><span class="brand-mark small"><span></span><span></span><span></span></span><strong>Kraddle Format</strong></div>
-          <p>Project-native software meaning.</p>
-        </footer>
-      </main>
-
-      <aside class="toc" aria-label="On this page">
-        <p>ON THIS PAGE</p>
-        <nav id="tocNav"></nav>
-      </aside>
-    </div>
-
-    <div class="search-modal" id="searchModal" hidden>
-      <button class="search-backdrop" aria-label="Close search"></button>
-      <div class="search-panel" role="dialog" aria-modal="true" aria-label="Search documentation">
-        <div class="search-input-wrap">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" /></svg>
-          <input id="searchInput" type="search" placeholder="Search the Kraddle Format..." autocomplete="off" />
-          <kbd>Esc</kbd>
-        </div>
-        <div class="search-results" id="searchResults"></div>
-      </div>
-    </div>
-    <script src="script.js"></script>
+    <!-- Main Multi-File Vue 3 Application -->
+    <script type="module" src="app.js"></script>
   </body>
 </html>
