@@ -102,17 +102,17 @@ fn the_second_engineer_journey_declare_launch_get_denied_close() {
     let rule = run_cli(
         &argv(&[
             "rule", "add", "--repo", &repo,
-            "--source", "src/domain", "--forbid", "src/ui",
-            "--text", "domain must not import ui",
+            "domain must not import ui",
+            "--in", "src/domain", "--not-in", "src/ui",
         ]),
         None,
     );
     assert_eq!(rule.code, 0, "{}", rule.output);
     let started = run_cli(
         &argv(&[
-            "episode", "start", "--repo", &repo,
-            "--task", "add a small domain service",
-            "--write-prefix", "src/domain",
+            "session", "start", "--repo", &repo,
+            "--intent", "add a small domain service",
+            "--in", "src/domain",
         ]),
         None,
     );

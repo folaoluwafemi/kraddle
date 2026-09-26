@@ -1,4 +1,4 @@
-//! Port of src/denials-text.js — human-readable, CODE-first denial text.
+//! Plain-language, CODE-first denial text: "<CODE> — <plain sentence>".
 
 use serde_json::Value;
 
@@ -38,49 +38,49 @@ fn safe_list(value: Option<&Value>) -> String {
     }
 }
 
-/// Port of describeDenial: "<CODE> — <plain language>", never throws.
+/// describe_denial: "<CODE> — <plain language>", never throws.
 pub fn describe_denial(code: &str, detail: &Value) -> String {
     let get = |key: &str| detail.get(key);
     match code {
         "PREFLIGHT_VIOLATED" => format!(
-            "PREFLIGHT_VIOLATED — This write would violate the rule '{}' that governs this episode. The file was not written.",
+            "PREFLIGHT_VIOLATED — this write breaks your rule '{}'. Nothing was written.",
             safe(get("commitment"))
         ),
-        "PREFLIGHT_UNKNOWN" => "PREFLIGHT_UNKNOWN — this write could not be verified — the check did not run or could not decide; writes are denied when checks cannot run.".to_string(),
+        "PREFLIGHT_UNKNOWN" => "PREFLIGHT_UNKNOWN — this write could not be verified: the check did not run or could not decide. Writes stay denied when checks cannot run.".to_string(),
         "TARGET_OUTSIDE_AUTHORITY" => format!(
-            "TARGET_OUTSIDE_AUTHORITY — the target {} is outside this episode's write bounds ({}). The file was not written.",
+            "TARGET_OUTSIDE_AUTHORITY — {} is outside where this session may write ({}). Nothing was written.",
             safe(get("target")),
             safe(get("targetPrefix"))
         ),
         "UNCONTROLLED_EFFECT" => format!(
-            "UNCONTROLLED_EFFECT — changes outside the admitted surface were found in the working tree: {}. Every change must go through the write tool, or the episode cannot close.",
+            "UNCONTROLLED_EFFECT — changes outside the allowed tool were found in the working tree: {}. Undo them or ask for a wider session; the session cannot finish while these are unaccounted for.",
             safe_list(get("paths"))
         ),
-        "AUTHORITY_REVOKED" => "AUTHORITY_REVOKED — the authority grant governing this episode was revoked; no further effects are admitted.".to_string(),
-        "AUTHORITY_EXPIRED" => "AUTHORITY_EXPIRED — the authority grant governing this episode has expired; no further effects are admitted.".to_string(),
-        "AUTHORITY_MISSING_OPERATIONS" => "AUTHORITY_MISSING_OPERATIONS — the authority grant lists no operations; nothing is authorized. Ask the human who started the episode to fix the grant.".to_string(),
-        "SELF_AMENDMENT_DENIED" => "SELF_AMENDMENT_DENIED — the rule that governs this episode cannot be changed from inside it. Propose the change to a human instead.".to_string(),
+        "AUTHORITY_REVOKED" => "AUTHORITY_REVOKED — permission to act in this session was revoked; nothing more is allowed.".to_string(),
+        "AUTHORITY_EXPIRED" => "AUTHORITY_EXPIRED — permission to act in this session has expired; nothing more is allowed.".to_string(),
+        "AUTHORITY_MISSING_OPERATIONS" => "AUTHORITY_MISSING_OPERATIONS — this session lists no allowed operations, so nothing is permitted. Ask the human who started it to fix the permission.".to_string(),
+        "SELF_AMENDMENT_DENIED" => "SELF_AMENDMENT_DENIED — rules cannot be changed from inside a session. Propose the change to a human instead.".to_string(),
         "PROFILE_GRAFT_DENIED" => format!(
-            "PROFILE_GRAFT_DENIED — members cannot be grafted onto the governing profile {} from inside the episode. Membership changes go through the human channel.",
+            "PROFILE_GRAFT_DENIED — membership of {} cannot be changed from inside the session. Rule changes go through the human channel.",
             safe(get("profileId"))
         ),
         "CONTEXT_INCOMPLETE" => format!(
-            "CONTEXT_INCOMPLETE — the governing context is incomplete: {}. The episode cannot proceed until every reason is resolved.",
+            "CONTEXT_INCOMPLETE — the picture is incomplete: {}. These must be resolved before the session can proceed.",
             safe_list(get("reasons"))
         ),
         "EPISODE_ALREADY_ACTIVE" => format!(
-            "EPISODE_ALREADY_ACTIVE — this episode already has {} admitted effect(s) from a previous server run; restarting would fork its state. Start a new episode instead.",
+            "EPISODE_ALREADY_ACTIVE — this session already has {} allowed change(s) from an earlier run; restarting would fork its history. Start a new session instead.",
             safe(get("admittedCount"))
         ),
-        "EVIDENCE_PIN_MISMATCH" => "EVIDENCE_PIN_MISMATCH — the dependency evidence is missing, unaccepted, or pinned to a different revision than the one being governed.".to_string(),
-        "EVIDENCE_SCOPE_MISMATCH" => "EVIDENCE_SCOPE_MISMATCH — the evidence record's contents do not match the extraction region it declares; it cannot be trusted to pin a context.".to_string(),
+        "EVIDENCE_PIN_MISMATCH" => "EVIDENCE_PIN_MISMATCH — the proof is missing, not accepted, or pinned to a different revision than the one being governed.".to_string(),
+        "EVIDENCE_SCOPE_MISMATCH" => "EVIDENCE_SCOPE_MISMATCH — the proof's contents do not match the region it declares, so it cannot be trusted.".to_string(),
         "EPISODE_NOT_ACTIVE" => format!(
-            "EPISODE_NOT_ACTIVE — the episode is not in an active state ({}); effects are not admitted.",
+            "EPISODE_NOT_ACTIVE — the session is not active ({}); nothing is allowed.",
             safe(get("lifecycle"))
         ),
-        "EPISODE_OUTCOME_MISSING" => "EPISODE_OUTCOME_MISSING — the episode has no outcome commitment and cannot close.".to_string(),
-        "NO_OP_NOT_DECLARED" => "NO_OP_NOT_DECLARED — an episode with no recorded effects must explicitly declare that it did nothing before it can close.".to_string(),
-        "WORKSPACE_EXISTS" => "WORKSPACE_EXISTS — a workspace already exists here; it was left untouched.".to_string(),
+        "EPISODE_OUTCOME_MISSING" => "EPISODE_OUTCOME_MISSING — the session has no recorded outcome and cannot finish.".to_string(),
+        "NO_OP_NOT_DECLARED" => "NO_OP_NOT_DECLARED — a session that made no changes must say so before it can finish.".to_string(),
+        "WORKSPACE_EXISTS" => "WORKSPACE_EXISTS — a .kraddle/ workspace already exists here; it was left untouched.".to_string(),
         other => format!("{} — (no description yet)", other),
     }
 }

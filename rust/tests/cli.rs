@@ -1,4 +1,4 @@
-//! Port of test/cli.test.js — the human channel.
+//! The human channel: rules, sessions, proof — display language.
 
 mod common;
 
@@ -69,14 +69,14 @@ fn rule_add_declares_a_governing_rule_pinned_to_head_and_scoped() {
     let result = run_cli(
         &argv(&[
             "rule", "add", "--repo", &root,
-            "--source", "src/domain", "--forbid", "src/ui",
-            "--text", "domain must not import ui",
+            "domain must not import ui",
+            "--in", "src/domain", "--not-in", "src/ui",
         ]),
         None,
     );
     assert_eq!(result.code, 0, "{}", result.output);
-    let binding_id = line_value(&result.output, "binding");
-    let evidence_id = line_value(&result.output, "evidence");
+    let binding_id = line_value(&result.output, "rule ");
+    let evidence_id = line_value(&result.output, "proof ");
     assert!(result.output.contains("rev"), "{}", result.output);
 
     let store = Workspace::new(&root);
@@ -140,14 +140,38 @@ fn rule_add_declares_a_governing_rule_pinned_to_head_and_scoped() {
 }
 
 #[test]
+fn old_flag_and_command_names_are_gone() {
+    let (_temp, root) = temp_repo();
+    run_cli(&argv(&["init", "--repo", &root]), None);
+    // The old flag names are not aliases: missing rule text refuses.
+    let old_flags = run_cli(
+        &argv(&[
+            "rule", "add", "--repo", &root,
+            "--source", "src/domain", "--forbid", "src/ui",
+            "--text", "domain must not import ui",
+        ]),
+        None,
+    );
+    assert_eq!(old_flags.code, 1);
+    assert!(!old_flags.output.contains("rule CB-"), "old flags must not create a rule");
+    // The old command name is gone entirely.
+    let old_command = run_cli(
+        &argv(&["episode", "start", "--repo", &root, "--intent", "x", "--in", "src/domain"]),
+        None,
+    );
+    assert_eq!(old_command.code, 1);
+    assert!(old_command.output.contains("unknown command: episode"), "{}", old_command.output);
+}
+
+#[test]
 fn rule_add_refuses_an_unsatisfiable_rule() {
     let (_temp, root) = temp_repo();
     run_cli(&argv(&["init", "--repo", &root]), None);
     let result = run_cli(
         &argv(&[
             "rule", "add", "--repo", &root,
-            "--source", "src", "--forbid", "src",
-            "--text", "src must not import src",
+            "src must not import src",
+            "--in", "src", "--not-in", "src",
         ]),
         None,
     );
@@ -161,7 +185,7 @@ fn rule_add_requires_text() {
     let (_temp, root) = temp_repo();
     run_cli(&argv(&["init", "--repo", &root]), None);
     let result = run_cli(
-        &argv(&["rule", "add", "--repo", &root, "--source", "src/domain", "--forbid", "src/ui"]),
+        &argv(&["rule", "add", "--repo", &root, "--in", "src/domain", "--not-in", "src/ui"]),
         None,
     );
     assert_eq!(result.code, 1);
@@ -170,22 +194,22 @@ fn rule_add_requires_text() {
 }
 
 #[test]
-fn episode_start_prints_env_vars_the_server_can_boot_from() {
+fn session_start_prints_env_vars_the_server_can_boot_from() {
     let (temp, root) = temp_repo();
     run_cli(&argv(&["init", "--repo", &root]), None);
     run_cli(
         &argv(&[
             "rule", "add", "--repo", &root,
-            "--source", "src/domain", "--forbid", "src/ui",
-            "--text", "domain must not import ui",
+            "domain must not import ui",
+            "--in", "src/domain", "--not-in", "src/ui",
         ]),
         None,
     );
     let result = run_cli(
         &argv(&[
-            "episode", "start", "--repo", &root,
-            "--task", "add a domain service",
-            "--write-prefix", "src/domain",
+            "session", "start", "--repo", &root,
+            "--intent", "add a domain service",
+            "--in", "src/domain",
         ]),
         None,
     );
@@ -216,19 +240,62 @@ fn episode_start_prints_env_vars_the_server_can_boot_from() {
 }
 
 #[test]
-fn episode_start_requires_write_prefix() {
+fn session_start_prints_a_pasteable_mcp_block() {
+    let (temp, root) = temp_repo();
+    run_cli(&argv(&["init", "--repo", &root]), None);
+    run_cli(
+        &argv(&[
+            "rule", "add", "--repo", &root,
+            "domain must not import ui",
+            "--in", "src/domain", "--not-in", "src/ui",
+        ]),
+        None,
+    );
+    let result = run_cli(
+        &argv(&[
+            "session", "start", "--repo", &root,
+            "--intent", "add a domain service",
+            "--in", "src/domain",
+        ]),
+        None,
+    );
+    assert_eq!(result.code, 0, "{}", result.output);
+    assert!(result.output.contains("\"mcpServers\""), "{}", result.output);
+    assert!(result.output.contains("kraddle-mcp-server"), "{}", result.output);
+    assert!(result.output.contains("can write to: src/domain/"), "{}", result.output);
+
+    let mut env: std::collections::BTreeMap<String, String> = Default::default();
+    for line in result.output.lines() {
+        if let Some(rest) = line.strip_prefix("KRADDLE_") {
+            if let Some((key, value)) = rest.split_once('=') {
+                env.insert(format!("KRADDLE_{}", key), value.to_string());
+            }
+        }
+    }
+    let server = create_kraddle_server(&ServerConfig {
+        repo_dir: temp.path().to_path_buf(),
+        workspace_dir: temp.path().to_path_buf(),
+        episode_id: env["KRADDLE_EPISODE_ID"].clone(),
+        base_evidence_id: env["KRADDLE_BASE_EVIDENCE_ID"].clone(),
+    })
+    .expect("server boots from the session output");
+    assert_eq!(server.mcp.tools_iter().count(), 3);
+}
+
+#[test]
+fn session_start_requires_in() {
     let (_temp, root) = temp_repo();
     run_cli(&argv(&["init", "--repo", &root]), None);
     run_cli(
         &argv(&[
             "rule", "add", "--repo", &root,
-            "--source", "src/domain", "--forbid", "src/ui",
-            "--text", "domain must not import ui",
+            "domain must not import ui",
+            "--in", "src/domain", "--not-in", "src/ui",
         ]),
         None,
     );
     let result = run_cli(
-        &argv(&["episode", "start", "--repo", &root, "--task", "add a domain service"]),
+        &argv(&["session", "start", "--repo", &root, "--intent", "add a domain service"]),
         None,
     );
     assert_eq!(result.code, 1);
@@ -242,16 +309,16 @@ fn bootstrapped_repo() -> (TempDir, String, String) {
     run_cli(
         &argv(&[
             "rule", "add", "--repo", &root,
-            "--source", "src/domain", "--forbid", "src/ui",
-            "--text", "domain must not import ui",
+            "domain must not import ui",
+            "--in", "src/domain", "--not-in", "src/ui",
         ]),
         None,
     );
     let started = run_cli(
         &argv(&[
-            "episode", "start", "--repo", &root,
-            "--task", "add a domain service",
-            "--write-prefix", "src/domain",
+            "session", "start", "--repo", &root,
+            "--intent", "add a domain service",
+            "--in", "src/domain",
         ]),
         None,
     );
@@ -265,16 +332,16 @@ fn status_names_rules_and_episodes() {
     let (_temp, root, episode_id) = bootstrapped_repo();
     let result = run_cli(&argv(&["status", "--repo", &root]), None);
     assert_eq!(result.code, 0, "{}", result.output);
-    assert!(result.output.contains("trusted"), "{}", result.output);
+    assert!(result.output.contains("clean"), "{}", result.output);
     assert!(result.output.contains("domain must not import ui"), "{}", result.output);
     assert!(result.output.contains(&episode_id), "{}", result.output);
-    assert!(result.output.contains("authorized"), "{}", result.output);
+    assert!(result.output.contains("open"), "{}", result.output);
 }
 
 #[test]
-fn abort_sets_the_episode_lifecycle_to_aborted() {
+fn stop_sets_the_session_lifecycle_to_aborted() {
     let (_temp, root, episode_id) = bootstrapped_repo();
-    let result = run_cli(&argv(&["episode", "abort", &episode_id, "--repo", &root]), None);
+    let result = run_cli(&argv(&["session", "stop", &episode_id, "--repo", &root]), None);
     assert_eq!(result.code, 0, "{}", result.output);
     let store = Workspace::new(&root);
     let loaded = store.load().unwrap();
@@ -283,7 +350,7 @@ fn abort_sets_the_episode_lifecycle_to_aborted() {
         Some(Some("aborted"))
     );
 
-    let unknown = run_cli(&argv(&["episode", "abort", "EP-doesnotexist", "--repo", &root]), None);
+    let unknown = run_cli(&argv(&["session", "stop", "EP-doesnotexist", "--repo", &root]), None);
     assert_eq!(unknown.code, 1);
     assert!(!unknown.output.contains("    at "));
 }

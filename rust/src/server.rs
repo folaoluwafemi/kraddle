@@ -1,6 +1,5 @@
-//! Port of src/server.js — the bounded agent surface. The server never
-//! creates or widens authority (G15): episode and authority are
-//! human-transacted before it starts.
+//! The bounded agent surface. The server never creates or widens
+//! authority: session and permission are human-transacted before it starts.
 
 use crate::denials_text::describe_denial;
 use crate::evaluators::run_evaluator;
@@ -52,7 +51,7 @@ fn episode_authority_unit<'a>(state: &'a crate::kernel::State, episode_id: &str)
     None
 }
 
-/// Port of validateToolPath: repo-relative POSIX paths only.
+/// Repo-relative POSIX paths only.
 fn validate_tool_path(path: &str) -> KResult<()> {
     if path.is_empty() {
         return Err(KraddleError::control(
@@ -300,7 +299,7 @@ fn write_file_handler(core: Arc<ServerCore>) -> ToolHandler {
                 .expect("admitted writes lock")
                 .insert(path.to_string(), content);
             persist_episode_activity(&core)?;
-            Ok(ToolResult::ok(format!("admitted {} under admission {}", path, admission.admission_id)))
+            Ok(ToolResult::ok(format!("wrote {} (checked: OK, change {})", path, admission.admission_id)))
         })())
     })
 }
@@ -472,7 +471,7 @@ fn close_episode_handler(core: Arc<ServerCore>) -> ToolHandler {
 
             validate_episode_closure(&core.workspace.state(), &core.episode_id)?;
             Ok(ToolResult::ok(format!(
-                "episode {} closed; resulting contentDigest {}",
+                "session {} finished; new state digest {}",
                 core.episode_id,
                 worktree_state_ref.get("contentDigest").and_then(|d| d.as_str()).unwrap_or("")
             )))
@@ -487,8 +486,8 @@ pub struct ServerConfig {
     pub base_evidence_id: String,
 }
 
-/// Port of createKraddleServer: startup validation chain, base digest pin,
-/// the three tools (read/write/close — nothing else, G15).
+/// Startup validation chain, base digest pin, the three tools
+/// (read/write/finish — nothing else).
 pub fn create_kraddle_server(config: &ServerConfig) -> KResult<KraddleServer> {
     let workspace = Workspace::new(&config.workspace_dir);
     let load_result = workspace.load()?;
@@ -522,9 +521,8 @@ pub fn create_kraddle_server(config: &ServerConfig) -> KResult<KraddleServer> {
             return Err(KraddleError::control(DenialCode::AuthorityExpired, json!({ "episodeId": config.episode_id })));
         }
     }
-    // A restarted server must not silently fork episode state: the
-    // admission ledger is persisted, so an already-active episode is
-    // refused here.
+    // A restarted server must not silently fork session state: the
+    // change list is persisted, so an already-active session is refused.
     let admitted_count = episode
         .field("admittedEffects")
         .and_then(|f| f.as_array())
@@ -576,7 +574,7 @@ pub fn create_kraddle_server(config: &ServerConfig) -> KResult<KraddleServer> {
 
     let read_tool = Tool {
         name: "kraddle_read_file".into(),
-        description: "Read a file from the governed repository, admitted through the episode authority.".into(),
+        description: "Read a file from this repo (bounded by this session's permission).".into(),
         input_schema: json!({
             "type": "object",
             "properties": { "path": { "type": "string" } },
@@ -586,7 +584,7 @@ pub fn create_kraddle_server(config: &ServerConfig) -> KResult<KraddleServer> {
     };
     let write_tool = Tool {
         name: "kraddle_write_file".into(),
-        description: "Write a file inside the episode authority, after preflight of governing architecture rules.".into(),
+        description: "Write a file where this session may write; the write is checked against the rules first.".into(),
         input_schema: json!({
             "type": "object",
             "properties": { "path": { "type": "string" }, "content": { "type": "string" } },
@@ -596,7 +594,7 @@ pub fn create_kraddle_server(config: &ServerConfig) -> KResult<KraddleServer> {
     };
     let close_tool = Tool {
         name: "kraddle_close_episode".into(),
-        description: "Request closure of the episode; unadmitted working-tree changes are refused.".into(),
+        description: "Finish the session; changes made outside the write tool are refused.".into(),
         input_schema: json!({ "type": "object", "properties": {} }),
         handler: close_episode_handler(Arc::clone(&core)),
     };
@@ -608,7 +606,7 @@ pub fn create_kraddle_server(config: &ServerConfig) -> KResult<KraddleServer> {
     Ok(KraddleServer { core, mcp })
 }
 
-/// The server binary entry point (D6: two threads, serialized handling).
+/// The server binary entry point.
 pub fn main() -> i32 {
     let repo_dir = std::env::var("KRADDLE_REPO").unwrap_or_default();
     let workspace_dir = std::env::var("KRADDLE_WORKSPACE_DIR").unwrap_or_default();

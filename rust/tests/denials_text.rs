@@ -1,4 +1,4 @@
-//! Port of test/denials-text.test.js — CODE-first, human-readable denials.
+//! Plain-language, CODE-first denials.
 
 use kraddle::denials_text::describe_denial;
 use serde_json::json;
@@ -11,7 +11,7 @@ fn preflight_violated_names_the_governing_commitment() {
     );
     assert!(text.starts_with("PREFLIGHT_VIOLATED — "));
     assert!(text.contains("domain must not import ui"));
-    assert!(text.contains("This write would violate the rule"));
+    assert!(text.contains("breaks your rule"));
 }
 
 #[test]
@@ -36,10 +36,10 @@ fn coverage_of_the_denial_surface() {
 
     let uncontrolled = describe_denial("UNCONTROLLED_EFFECT", &json!({ "paths": ["src/rogue.ts"] }));
     assert!(uncontrolled.contains("src/rogue.ts"));
-    assert!(uncontrolled.contains("changes outside the admitted surface were found in the working tree"));
+    assert!(uncontrolled.contains("changes outside the allowed tool were found in the working tree"));
 
     let self_amendment = describe_denial("SELF_AMENDMENT_DENIED", &json!({}));
-    assert!(self_amendment.contains("the rule that governs this episode cannot be changed from inside it"));
+    assert!(self_amendment.contains("rules cannot be changed from inside a session"));
 
     let revoked = describe_denial("AUTHORITY_REVOKED", &json!({}));
     assert!(revoked.starts_with("AUTHORITY_REVOKED — "));
