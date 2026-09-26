@@ -20,12 +20,13 @@ intent
 
 Kraddle is in **implementation of the Phase 0/0.5 control kernel**. The repository currently contains:
 
-- The evolving theory and checkpoints in `contexts/`.
-- The canonical terminology and format reference in `docs/`.
-- A working Phase 0/0.5 kernel runtime in `src/kernel.js`: envelope validation, committed transactions, quarantine-on-corruption, default-deny mutation authorization, effect admission, revision-pinned closure, typed coverage, and the two-block demo (`test/demo.test.js`).
-- A regex dependency extractor (`src/extract.js`) and architecture-rule evaluator (`src/evaluators.js`).
-- Test suite: `npm test` reports 44 pass / 6 todo / 0 fail. Six adversarial cases (AD-06..AD-09, AD-14, AD-15) are deferred with stated blockers.
-- KRD binary encoding, repository analysis, agent-facing surface, and sync remain unimplemented.
+- The evolving theory and checkpoints in `knowledge_base/`.
+- A working Phase 0/0.5 kernel runtime in `rust/src/kernel.rs`: envelope validation, committed transactions, quarantine-on-corruption, default-deny mutation authorization, effect admission, revision-pinned closure, typed coverage, and the two-block demo (`rust/tests/demo.rs`).
+- A JS/TS dependency adapter (`rust/src/extract.rs`, regex-based) and the architecture-rule evaluator (`rust/src/evaluators.rs`).
+- The human CLI (`rust/src/cli.rs`): rules, sessions, proof, and the `kraddle try` 60-second demo.
+- The agent MCP surface (`rust/src/server.rs`): exactly three tools — read, write (checked against rules first), finish.
+- Test suite: `cargo test` reports all suites green; six adversarial cases (AD-06..AD-09, AD-14, AD-15) are deferred with stated blockers.
+- KRD binary encoding, repository analysis beyond the JS/TS adapter, and sync remain unimplemented.
 
 Maturity labels used throughout the project:
 
@@ -36,9 +37,9 @@ Maturity labels used throughout the project:
 | **Implemented** | Working software exists |
 | **Verified** | Conformance tests establish the implementation's behavior |
 
-## Quickstart (Rust binary)
+## Quickstart
 
-Requirements: Rust 1.98+ (stable), git on PATH. Build once, no runtime dependencies.
+Requirements: Rust stable, git on PATH. Build once, no runtime dependencies.
 
 1. Build the binaries:
 
@@ -47,48 +48,36 @@ Requirements: Rust 1.98+ (stable), git on PATH. Build once, no runtime dependenc
    cargo build --release
    ```
 
-   This produces `rust/target/release/kraddle.exe` (human channel) and `rust/target/release/kraddle-mcp-server.exe` (agent surface). All commands below assume you are in the repository you want to govern; pass `--repo <dir>` otherwise.
+   This produces `rust/target/release/kraddle.exe` (human channel) and `rust/target/release/kraddle-mcp-server.exe` (agent surface). Add them to your PATH or call them by full path.
 
-2. Create a workspace for your repository:
+2. See the whole loop in 60 seconds — no setup, no flags:
+
+   ```sh
+   kraddle try "add checkout behavior"
+   ```
+
+   This creates a throwaway repo, declares one rule, starts a session, and prints a pasteable MCP config.
+
+3. In your own repository:
 
    ```sh
    kraddle init
+   kraddle rule add "domain must not import ui" --in src/domain --not-in src/ui
+   kraddle session start --intent "add a small domain service" --in src/domain
    ```
 
-   This creates `.kraddle/` in the current directory and refuses to overwrite one that already exists.
+   The rule is pinned to your current git commit and the dependency proof at that revision. The session prints a short plan and a ready-to-paste MCP JSON block.
 
-3. Declare one rule, in your own words:
+4. Point any MCP client at the server over stdio (paste the block into Cursor, Claude Code, or anything that speaks MCP). The agent sees exactly three tools: read a file, write a file (checked against your rules first), and finish the session.
 
-   ```sh
-   kraddle rule add --source src/domain --forbid src/ui \
-     --text "domain must not import ui"
-   ```
-
-   The rule is pinned to your current git revision and to the dependency evidence extracted at that revision.
-
-4. Launch an episode for your agent:
-
-   ```sh
-   kraddle episode start --task "add a small domain service" \
-     --write-prefix src/domain
-   ```
-
-   The command prints four environment variables. Start the MCP server with them:
-
-   ```sh
-   kraddle-mcp-server
-   ```
-
-5. Point any MCP client at the server over stdio. The agent sees exactly three tools: read a file, write a file, request episode closure.
-
-6. What you should see:
+5. What you should see:
    - The agent reads and writes through those three tools and nothing else.
    - A write that would violate your rule is **denied, with your rule text quoted**, and the file is never written.
-   - If the agent changes files outside the tool (directly on disk), closing the episode is **refused** and the changed paths are named.
+   - If the agent changes files outside the tool (directly on disk), finishing the session is **refused** and the changed paths are named.
 
-What Kraddle is *not* doing here: there is no sandbox and no enforced perimeter. An agent can still write files directly; Kraddle denies admission for violating writes, refuses to record unadmitted changes as controlled execution, and offers no tool that can weaken the governing rule. It detects and refuses — it does not prevent. See the maturity table above for what is verified versus specified.
+What Kraddle is *not* doing here: there is no sandbox and no enforced perimeter. An agent can still write files directly; Kraddle denies violating writes, refuses to record unapproved changes as controlled execution, and offers no tool that can weaken the governing rule. It detects and refuses — it does not prevent. See the maturity table above for what is verified versus specified.
 
-The original Node implementation is archived at `archive/node-implementation/` (reference only; the Rust port proved byte-level format compatibility with it).
+The original Node implementation has been removed. The Rust port is now the sole implementation; the archive is preserved in git history.
 
 ## The Problem
 
@@ -304,7 +293,7 @@ Seven connected specification problems remain:
 7. Closed-loop conformance and adversarial test suite
 ```
 
-The normative completion plan is in `contexts/architecture_completion_plan_2026-09-01.md`. The first profile specification is in `contexts/profile_definition_metamodel_2026-09-01.md`.
+The normative completion plan is in `knowledge_base/architecture_completion_plan_2026-09-01.md`. The first profile specification is in `knowledge_base/profile_definition_metamodel_2026-09-01.md`.
 
 ## First Adversarial Proof
 
@@ -335,15 +324,12 @@ Kraddle succeeds when it resolves applicable meaning, declares context boundarie
 ## Repository Guide
 
 ```text
-docs/                                   Canonical visual reference
-contexts/semantic_control_plane_*.md    Current architectural synthesis
-contexts/architecture_completion_*.md  Remaining design work and review fixture
-contexts/meaning_layer_architecture_*.md Storage and extraction lineage
-contexts/kraddle_compositional_*.md     Meaning and deterministic extraction lineage
-contexts/kraddle_checkpoint_*.md        Original missing-middle synthesis
+docs/                                       Canonical visual reference site
+knowledge_base/                             All theory, plans, and project context
+rust/                                       The implementation (sole, live codebase)
 ```
 
-Start with `docs/index.html`, then read `contexts/profile_definition_metamodel_2026-09-01.md` and the two newest architectural checkpoints.
+Start with `docs/index.html`, then read `knowledge_base/profile_definition_metamodel_2026-09-01.md` and the two newest architectural checkpoints.
 
 ## Current Claim
 
@@ -353,7 +339,7 @@ Achievable guarantees, with current maturity:
 
 | Guarantee | Maturity |
 | --- | --- |
-| No silent promotion of inference to accepted meaning | **Verified** (envelope + acceptance authority, test/envelope.test.js) |
+| No silent promotion of inference to accepted meaning | **Verified** (envelope + acceptance authority, rust/tests/envelope.rs) |
 | No silent omission of known applicable commitments | **Verified** (resolver, AD-01) |
 | No silent execution outside delegated authority | **Verified at admission** (AD-02/AD-13; perimeter is advisory — no sandbox yet) |
 | No silent success when required evaluation failed or did not run | **Verified** (AD-03/AD-11) |
