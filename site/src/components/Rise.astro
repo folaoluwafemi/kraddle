@@ -1,9 +1,9 @@
 ---
 // A heading that rises into view one line at a time.
-interface Props { lines: string[]; as?: 'h1' | 'h2' | 'h3' | 'p'; class?: string; accentLast?: boolean }
-const { lines, as: Tag = 'h2', class: cls = '', accentLast = false } = Astro.props;
+interface Props { lines: string[]; as?: 'h1' | 'h2' | 'h3' | 'p'; class?: string; accentLast?: boolean; clear?: boolean }
+const { lines, as: Tag = 'h2', class: cls = '', accentLast = false, clear = false } = Astro.props;
 ---
-<Tag class={`rise ${cls}`} data-reveal>
+<Tag class={`rise ${cls}`} data-reveal data-clear={clear ? '' : undefined}>
   {lines.map((line, i) => (
     <span style={`--l:${i}`}><span class={accentLast && i === lines.length - 1 ? 'accent' : undefined}>{line}</span></span>
   ))}

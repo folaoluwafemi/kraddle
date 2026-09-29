@@ -30,6 +30,11 @@ export function morph(section: HTMLElement) {
   let state = 0;
   let W = 0, dpr = 1, scale = 1, ox = 0, oy = 0;
   let fg = '#EEEEEA', faint = '#8E8E88', orange = '#FF5A1F';
+  const readColors = () => {
+    const cs = getComputedStyle(canvas);
+    fg = cs.color; faint = cs.getPropertyValue('--field-faint').trim() || faint;
+    orange = cs.getPropertyValue('--field-hot').trim() || cs.getPropertyValue('--k-orange').trim() || orange;
+  };
   const layout = () => {
     const rect = canvas.getBoundingClientRect();
     dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -38,29 +43,37 @@ export function morph(section: HTMLElement) {
     canvas.height = Math.round(rect.height * dpr);
     scale = Math.min(rect.width / BOX.w, rect.height / BOX.h) * 0.92;
     ox = (rect.width - BOX.w * scale) / 2; oy = (rect.height - BOX.h * scale) / 2;
-    const cs = getComputedStyle(canvas);
-    fg = cs.color; faint = cs.getPropertyValue('--field-faint').trim() || faint;
-    orange = cs.getPropertyValue('--k-orange').trim() || orange;
+    readColors();
   };
   layout();
   new ResizeObserver(layout).observe(canvas);
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => setTimeout(layout, 0));
 
-  const labels = [...section.querySelectorAll<HTMLElement>('[data-state]')];
+  const labels = [...section.querySelectorAll<HTMLElement>('.state[data-state]')];
   const ticks = [...section.querySelectorAll<HTMLElement>('[data-tick]')];
+  const cards = [...section.querySelectorAll<HTMLElement>('[data-card]')];
   const setState = (n: number) => {
     if (n === state) return;
     state = n;
     section.dataset.state = String(n);
     labels.forEach((l, i) => { l.classList.toggle('on', i === n); l.classList.toggle('gone', i < n); });
-    ticks.forEach((t, i) => t.classList.toggle('on', i <= n));
+    ticks.forEach((t, i) => { t.classList.toggle('on', i === n); if (i === n) t.setAttribute('aria-current', 'step'); else t.removeAttribute('aria-current'); });
+    cards.forEach((c, i) => c.classList.toggle('on', i === n));
+    readColors();
+    setTimeout(readColors, 750); // after the background has finished changing
   };
+  const scrollSpan = () => section.offsetHeight - window.innerHeight;
   const onScroll = () => {
     const rect = section.getBoundingClientRect();
-    const total = rect.height - window.innerHeight;
-    const p = Math.min(1, Math.max(0, -rect.top / total));
+    const p = Math.min(1, Math.max(0, -rect.top / scrollSpan()));
+    // each step's bar fills across its quarter of the scroll
+    ticks.forEach((t, i) => t.style.setProperty('--p', String(Math.min(1, Math.max(0, p * 4 - i)))));
     setState(Math.min(3, Math.floor(p * 4.0001)));
   };
+  ticks.forEach((t, i) => t.addEventListener('click', () => {
+    const top = section.getBoundingClientRect().top + window.scrollY + scrollSpan() * ((i + 0.55) / 4);
+    window.scrollTo({ top, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }));
   window.addEventListener('scroll', onScroll, { passive: true });
   onScroll();
 

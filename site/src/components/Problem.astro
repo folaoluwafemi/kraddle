@@ -1,60 +1,114 @@
 ---
+import AssetSlot from './AssetSlot.astro';
+import Mark from './Mark.astro';
+
 const states = [
-  { word: 'Too little.', line: 'It guesses what you never said, and breaks what worked.' },
-  { word: 'Too much.', line: 'It drowns in everything, and forgets halfway through.' },
-  { word: 'Out of date.', line: 'It follows what used to be true.' },
-  { word: 'Exactly enough.', line: 'What this step needs. Nothing more. That’s Kraddle.' },
+  {
+    step: 'Too little', word: 'Too little.', line: 'It guesses what you never said, and breaks what worked.',
+    asset: { kind: 'Illustration' as const, desc: 'An agent cheerfully saying “Done!” while, behind it, the checkout now shows the wrong price. Flat vector, ink lines, one orange accent.' },
+  },
+  {
+    step: 'Too much', word: 'Too much.', line: 'It drowns in everything, and forgets halfway through.',
+    asset: { kind: 'Illustration' as const, desc: 'A context window stuffed with hundreds of files, a meter at 98%, and the one instruction that mattered buried in the middle.' },
+  },
+  {
+    step: 'Out of date', word: 'Out of date.', line: 'It follows what used to be true.',
+    asset: { kind: 'Illustration' as const, desc: 'A rules file last edited four months ago, next to code that has changed since. The agent follows the old rule.' },
+  },
+  {
+    step: 'Kraddle', word: 'Exactly enough.', line: 'What this step needs. Nothing more. That’s Kraddle.',
+    asset: { kind: 'Screenshot' as const, desc: 'Kraddle’s context card for one agent step: the four things this step needs, and 1,314 others skipped.' },
+  },
 ];
 ---
-<section class="problem stage-inv" id="why" data-morph-section>
+<section class="problem stage-inv" id="why" data-morph-section data-state="0">
   <div class="pin">
     <div class="wrap grid">
       <div class="text">
         <p class="label" data-scramble>Why agents break what already worked</p>
+
+        <ol class="stepper" aria-label="Four kinds of context">
+          {states.map((s, i) => (
+            <li>
+              <button type="button" class={i === 0 ? 'on' : ''} data-tick={i} aria-current={i === 0 ? 'step' : undefined}>
+                <span class="num readout">{String(i + 1).padStart(2, '0')}</span>
+                <span class="nm">{i === 3 ? <><Mark /> Kraddle</> : s.step}</span>
+                <span class="fill" aria-hidden="true"><span></span></span>
+              </button>
+            </li>
+          ))}
+        </ol>
+
         <div class="states">
           {states.map((s, i) => (
-            <div class={`state${i === 0 ? ' on' : ''}${i === 3 ? ' last' : ''}`} data-state={i}>
+            <div class={`state${i === 0 ? ' on' : ''}`} data-state={i}>
               <h2>{s.word}</h2>
               <p>{s.line}</p>
             </div>
           ))}
         </div>
-        <ol class="ticks" aria-hidden="true">
-          {states.map((s, i) => <li class={i === 0 ? 'on' : ''} data-tick={i}><span></span>{s.word.replace('.', '')}</li>)}
-        </ol>
       </div>
+
       <div class="viz">
         <canvas data-morph aria-label="The Kraddle mark in dots, shown with too little, too much, out-of-date and exactly enough context"></canvas>
+        <div class="cards">
+          {states.map((s, i) => (
+            <div class={`card${i === 0 ? ' on' : ''}`} data-card={i}>
+              <AssetSlot kind={s.asset.kind} desc={s.asset.desc} ratio="4 / 3" />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
-    <p class="scroll label" aria-hidden="true">Keep scrolling</p>
   </div>
 </section>
 
 <style>
-  .problem { height: 420vh; position: relative; }
+  .problem { height: 440vh; position: relative; transition: background-color .7s var(--ease), color .7s var(--ease); }
+  .problem[data-state="3"] {
+    background: var(--k-orange); color: #121212;
+    --inv-fg: #121212; --inv-muted: #3A1A0C; --inv-line: rgba(18,18,18,.25); --k-ink: #121212; --k-graphite: #3A1A0C;
+    --slot-bg: #F8F8F6; --slot-fg: #121212; --slot-line: #121212;
+  }
   .pin { position: sticky; top: 0; height: 100svh; display: flex; align-items: center; overflow: hidden; }
-  .grid { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; align-items: center; }
+  .grid { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(32px, 5vw, 80px); align-items: center; }
   .text { display: flex; flex-direction: column; gap: 28px; }
-  .states { position: relative; min-height: clamp(220px, 26vw, 320px); }
+  .label { color: var(--inv-muted); }
+
+  .stepper { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .stepper button { all: unset; box-sizing: border-box; cursor: pointer; width: 100%; display: flex; flex-direction: column; gap: 6px; padding: 4px 0 0; color: var(--inv-muted); transition: color .3s; }
+  .stepper button:hover, .stepper button.on { color: var(--inv-fg); }
+  .stepper button:focus-visible { outline: 2px solid var(--k-orange); outline-offset: 4px; }
+  .num { font-size: 20px; }
+  .nm { font-family: var(--k-font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .nm :global(.mark) { width: 11px; height: auto; overflow: visible; }
+  .fill { display: block; height: 3px; background: var(--inv-line); position: relative; overflow: hidden; }
+  .fill span { position: absolute; inset: 0; background: var(--k-orange); transform-origin: 0 50%; transform: scaleX(var(--p, 0)); }
+  .problem[data-state="3"] .fill span { background: #121212; }
+  li:last-child .num { color: var(--k-orange); }
+  .problem[data-state="3"] li:last-child .num { color: #121212; }
+
+  .states { position: relative; min-height: clamp(210px, 24vw, 300px); }
   .state { position: absolute; inset: 0 auto auto 0; display: flex; flex-direction: column; gap: 18px; opacity: 0; transform: translateY(24px); transition: opacity .5s var(--ease), transform .7s var(--ease); pointer-events: none; }
   .state.on { opacity: 1; transform: none; }
   .state.gone { transform: translateY(-24px); }
-  .state h2 { font-size: clamp(52px, 8vw, 120px); line-height: .95; letter-spacing: -.04em; }
-  .state.last h2 { color: var(--k-orange); }
+  .state h2 { font-size: clamp(52px, 7.6vw, 116px); line-height: .95; letter-spacing: -.04em; }
   .state p { font-size: clamp(20px, 2vw, 26px); color: var(--inv-muted); max-width: 26ch; }
-  .ticks { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 22px; font-family: var(--k-font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--inv-muted); }
-  .ticks li { display: flex; align-items: center; gap: 8px; transition: color .3s; }
-  .ticks span { width: 8px; height: 8px; border: 1px solid currentColor; transition: background .3s, border-color .3s; }
-  .ticks li.on { color: var(--inv-fg); }
-  .ticks li.on span { background: var(--k-orange); border-color: var(--k-orange); }
-  .viz { aspect-ratio: 1 / 1; width: 100%; max-width: 560px; justify-self: center; }
-  canvas { width: 100%; height: 100%; color: var(--inv-fg); --field-faint: var(--inv-muted); }
-  .scroll { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); color: var(--inv-muted); transition: opacity .4s; }
-  .problem[data-state="3"] .scroll { opacity: 0; }
+  .state[data-state="3"] p { color: #121212; }
+
+  .viz { position: relative; width: 100%; max-width: 560px; justify-self: center; aspect-ratio: 1 / 1; }
+  canvas { width: 100%; height: 100%; color: var(--inv-fg); --field-faint: var(--inv-muted); --field-hot: var(--k-orange); }
+  .problem[data-state="3"] canvas { --field-hot: #F8F8F6; }
+  .cards { position: absolute; left: -12%; bottom: -6%; width: 58%; }
+  .card { position: absolute; left: 0; bottom: 0; width: 100%; opacity: 0; transform: translateY(20px) rotate(-3deg) scale(.96); transition: opacity .5s var(--ease), transform .7s var(--ease); box-shadow: 0 30px 60px -30px rgba(0,0,0,.55); pointer-events: none; }
+  .card.on { opacity: 1; transform: rotate(-2deg); pointer-events: auto; }
+  .card.on:hover { transform: rotate(0deg) translateY(-6px) scale(1.03); }
+
   @media (max-width: 860px) {
-    .grid { grid-template-columns: 1fr; gap: 12px; }
-    .viz { order: -1; max-width: 300px; }
-    .states { min-height: 200px; }
+    .grid { grid-template-columns: 1fr; gap: 16px; }
+    .viz { order: -1; max-width: 260px; }
+    .cards { display: none; }
+    .states { min-height: 190px; }
+    .nm { font-size: 9.5px; }
   }
 </style>

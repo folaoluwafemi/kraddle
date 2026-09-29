@@ -1,160 +1,90 @@
 ---
 import Rise from './Rise.astro';
+import AssetSlot from './AssetSlot.astro';
 
-type N = { id: string; x: number; y: number; w: number; label: string; tier: 0 | 1 | 2; limit: string; slice?: boolean; changed?: boolean };
-const nodes: N[] = [
-  { id: 'p1', x: 20, y: 280, w: 200, label: 'People can pay', tier: 0, limit: 'Purpose: checkout exists so people can pay.' },
-  { id: 'c1', x: 300, y: 110, w: 180, label: 'Pricing', tier: 1, limit: 'Must keep: prices are only calculated on the server.', slice: true },
-  { id: 'c2', x: 300, y: 220, w: 180, label: 'Discounts', tier: 1, limit: 'Must keep: discounts apply before tax.', slice: true },
-  { id: 'c3', x: 300, y: 330, w: 180, label: 'Payments', tier: 1, limit: 'Chosen: Stripe only, so refunds stay simple.' },
-  { id: 'c4', x: 300, y: 440, w: 180, label: 'Cart', tier: 1, limit: 'Must keep: the cart survives a page reload.' },
-  { id: 'f1', x: 570, y: 70, w: 210, label: 'api/pricing.ts', tier: 2, limit: 'Where totals are calculated. 14 places call it.', slice: true },
-  { id: 'f2', x: 570, y: 150, w: 210, label: 'lib/tax.ts', tier: 2, limit: 'Tax rules by region.' },
-  { id: 'f3', x: 570, y: 230, w: 210, label: 'ui/Checkout.tsx', tier: 2, limit: 'The checkout screen. Keeps its step order.', slice: true, changed: true },
-  { id: 'f4', x: 570, y: 310, w: 210, label: 'checkout/flow.ts', tier: 2, limit: 'The order of checkout steps.' },
-  { id: 'f5', x: 570, y: 390, w: 210, label: 'pay/stripe.ts', tier: 2, limit: 'Stripe integration and refunds.' },
-  { id: 'f6', x: 570, y: 470, w: 210, label: 'cart/store.ts', tier: 2, limit: 'Cart state, saved locally.' },
-];
-const H = { 0: 64, 1: 52, 2: 44 } as const;
-const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
-const links: [string, string][] = [
-  ['p1', 'c1'], ['p1', 'c2'], ['p1', 'c3'], ['p1', 'c4'],
-  ['c1', 'f1'], ['c1', 'f2'], ['c2', 'f1'], ['c2', 'f3'], ['c3', 'f5'], ['c3', 'f4'], ['c4', 'f6'], ['c4', 'f3'],
-];
-const curve = (x1: number, y1: number, x2: number, y2: number) => {
-  const mx = (x1 + x2) / 2;
-  return `M${x1} ${y1}C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`;
-};
-const edges = links.map(([a, b], i) => {
-  const A = byId[a], B = byId[b];
-  return { d: curve(A.x + A.w, A.y, B.x, B.y), slice: !!(A.slice && B.slice), i, touchesChanged: !!(A.changed || B.changed) };
-});
-const agent = { x: 860, y: 280 };
-const feeds = nodes.filter((n) => n.slice).map((n) => curve(n.x + n.w, n.y, agent.x - 8, agent.y));
-
-const steps = [
-  { n: '01', title: 'Map it', line: 'Kraddle reads your code and its history, and maps what every part is for and what it must keep true.' },
-  { n: '02', title: 'Slice it', line: 'Each agent step gets only the part of the map it needs. Nothing more.' },
-  { n: '03', title: 'Keep it current', line: 'The map updates as you build. When something is unclear, Kraddle asks you once.' },
+const cases = [
+  {
+    title: 'Bring your codebase',
+    steps: ['Open your repo in Kraddle.', 'It learns how the project is meant to work.', 'Ask for a change. Nothing else breaks.'],
+    asset: { kind: 'Recording' as const, desc: 'Opening an existing repo in the Kraddle desktop app. A readout finishes learning the project, then an agent ships a change with a small, clean diff.' },
+  },
+  {
+    title: 'Start from an idea',
+    steps: ['Describe what’s in your head.', 'Kraddle asks only the questions that matter.', 'Agents build it, and it stays consistent as it grows.'],
+    asset: { kind: 'Recording' as const, desc: 'Typing a one-paragraph idea. Kraddle asks three sharp questions, then the first screens of the product appear.' },
+  },
+  {
+    title: 'Come back after a break',
+    steps: ['Open the project weeks later.', 'See what changed and what’s still open.', 'Pick up where you left off, and so do your agents.'],
+    asset: { kind: 'Screenshot' as const, desc: 'A “while you were away” view: what changed, what’s parked, what’s next, all in one screen.' },
+  },
+  {
+    title: 'Try a wild idea',
+    steps: ['Suggest something new.', 'See what it would change before anything is touched.', 'Explore it, or park it for later.'],
+    asset: { kind: 'Screenshot' as const, desc: 'The ideas view: a new direction, the parts of the project it would affect, and Explore / Park buttons.' },
+  },
 ];
 ---
 <section class="section how" id="how">
   <div class="wrap">
     <div class="head">
-      <p class="label" data-scramble data-reveal>How it works</p>
-      <Rise lines={['A map of your project.', 'A slice for every step.']} />
+      <p class="label" data-scramble data-reveal>How you’ll use it</p>
+      <Rise lines={['Start anywhere.', 'It keeps up.']} />
     </div>
 
-    <div class="map" data-map data-step="0" data-reveal>
-      <div class="tabs" role="tablist" aria-label="How Kraddle works">
-        {steps.map((s, i) => (
-          <button role="tab" type="button" class="tab" aria-selected={i === 0 ? 'true' : 'false'} data-go={i}>
-            <span class="readout n">{s.n}</span><span class="t">{s.title}</span><span class="bar" aria-hidden="true"><span></span></span>
-          </button>
+    <div class="cases" data-cases>
+      <div class="list" role="tablist" aria-label="Use cases">
+        {cases.map((c, i) => (
+          <div role="tab" tabindex="0" class="case" aria-selected={i === 0 ? 'true' : 'false'} data-go={i}>
+            <span class="top"><span class="n readout">{String(i + 1).padStart(2, '0')}</span><span class="t">{c.title}</span><span class="plus" aria-hidden="true"></span></span>
+            <ol class="steps">
+              {c.steps.map((s, k) => <li style={`--k:${k}`}><span class="tick" aria-hidden="true"></span>{s}</li>)}
+            </ol>
+            <span class="bar" aria-hidden="true"><span></span></span>
+          </div>
         ))}
       </div>
-
-      <div class="canvas">
-        <svg viewBox="0 0 1000 540" role="img" aria-label="A map of a checkout feature: its purpose, its capabilities and the code files, linked together">
-          <g class="tiers mono" aria-hidden="true">
-            <text x="20" y="28">Purpose</text><text x="300" y="28">What it does</text><text x="570" y="28">Code</text>
-          </g>
-          <g class="edges">
-            {edges.map((e) => (
-              <path d={e.d} class={`edge${e.slice ? ' slice' : ''}${e.touchesChanged ? ' touched' : ''}`} pathLength="1" style={`--i:${e.i}`} />
-            ))}
-          </g>
-          <g class="feeds">
-            {feeds.map((d, i) => <path d={d} class="feed" style={`--i:${i}`} />)}
-          </g>
-          {nodes.map((n, i) => (
-            <g class={`node t${n.tier}${n.slice ? ' slice' : ''}${n.changed ? ' changed' : ''}`} tabindex="0" data-limit={n.limit} data-label={n.label} style={`--i:${i}`} transform={`translate(${n.x} ${n.y - H[n.tier] / 2})`}>
-              <rect width={n.w} height={H[n.tier]} />
-              <text x="16" y={H[n.tier] / 2 + 5}>{n.label}</text>
-              {n.changed && <g class="badge" transform={`translate(${n.w - 74} ${-11})`}><rect width="70" height="20" /><text x="35" y="14" text-anchor="middle">changed</text></g>}
-            </g>
-          ))}
-          <g class="agent" transform={`translate(${agent.x} ${agent.y - 34})`}>
-            <rect width="128" height="68" />
-            <text x="64" y="30" text-anchor="middle" class="a1">agent</text>
-            <text x="64" y="50" text-anchor="middle" class="a2">4 of 1,318</text>
-          </g>
-          <g class="ask" transform="translate(300 172)">
-            <rect x="0" y="-44" width="236" height="36" />
-            <text x="14" y="-21">Should discounts stack?</text>
-          </g>
-        </svg>
-        <div class="tip" data-tip hidden><b></b><span></span></div>
-      </div>
-
-      <div class="lines">
-        {steps.map((s, i) => <p class={`line${i === 0 ? ' on' : ''}`} data-line={i}>{s.line}</p>)}
+      <div class="stage" data-reveal>
+        {cases.map((c, i) => (
+          <div class={`shot${i === 0 ? ' on' : ''}`} data-shot={i}>
+            <AssetSlot kind={c.asset.kind} desc={c.asset.desc} ratio="16 / 11" />
+          </div>
+        ))}
       </div>
     </div>
   </div>
 </section>
 
 <style>
-  .map { max-width: 1100px; margin-inline: auto; display: flex; flex-direction: column; gap: 24px; }
-  .tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-  .tab { all: unset; box-sizing: border-box; cursor: pointer; display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 4px 12px; padding: 14px 16px 16px; border: 1px solid var(--k-line); position: relative; transition: border-color .3s, background .3s; }
-  .tab:hover { border-color: var(--k-graphite); }
-  .tab[aria-selected="true"] { border-color: var(--k-ink); background: var(--k-surface); }
-  .tab:focus-visible { outline: 2px solid var(--k-orange); outline-offset: 2px; }
-  .n { font-size: 22px; color: var(--k-graphite); transition: color .3s; }
-  .tab[aria-selected="true"] .n { color: var(--k-orange-text); }
-  .t { font-family: var(--k-font-header); font-size: clamp(18px, 2vw, 24px); letter-spacing: -.02em; }
-  .bar { position: absolute; left: -1px; right: -1px; bottom: -1px; height: 2px; }
-  .bar span { display: block; height: 100%; background: var(--k-orange); transform-origin: 0 50%; transform: scaleX(0); }
-  .tab[aria-selected="true"] .bar span { animation: fill var(--dur, 5s) linear forwards; }
-  .map.paused .tab[aria-selected="true"] .bar span { animation-play-state: paused; }
+  .cases { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: clamp(24px, 4vw, 64px); align-items: start; max-width: 1180px; margin-inline: auto; }
+  @media (max-width: 900px) { .cases { grid-template-columns: 1fr; } .stage { order: -1; } }
+  .list { display: flex; flex-direction: column; border-top: 1px solid var(--k-line); }
+  .case { all: unset; box-sizing: border-box; cursor: pointer; position: relative; display: flex; flex-direction: column; padding: 22px 4px; border-bottom: 1px solid var(--k-line); }
+  .case:focus-visible { outline: 2px solid var(--k-orange); outline-offset: 2px; }
+  .top { display: flex; align-items: baseline; gap: 16px; }
+  .n { font-size: 20px; color: var(--k-graphite); transition: color .3s; }
+  .t { font-family: var(--k-font-header); font-size: clamp(24px, 2.6vw, 34px); letter-spacing: -.02em; color: var(--k-graphite); transition: color .3s, transform .5s var(--ease); }
+  .case:hover .t { color: var(--k-ink); transform: translateX(4px); }
+  .case[aria-selected="true"] .t { color: var(--k-ink); }
+  .case[aria-selected="true"] .n { color: var(--k-orange-text); }
+  .plus { margin-left: auto; width: 14px; height: 14px; position: relative; flex: none; }
+  .plus::before, .plus::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1.5px; background: currentColor; transition: transform .45s var(--ease); }
+  .plus::after { transform: rotate(90deg); }
+  .case[aria-selected="true"] .plus::after { transform: rotate(0deg); }
+  .steps { list-style: none; margin: 0; padding: 0 0 0 36px; display: grid; gap: 10px; max-height: 0; overflow: hidden; transition: max-height .6s var(--ease), margin .4s; }
+  .case[aria-selected="true"] .steps { max-height: 220px; margin-top: 16px; }
+  .steps li { display: flex; gap: 12px; align-items: baseline; font-size: 18px; color: var(--k-ink); opacity: 0; transform: translateX(-6px); transition: opacity .4s, transform .5s var(--ease); }
+  .case[aria-selected="true"] .steps li { opacity: 1; transform: none; transition-delay: calc(.15s + var(--k) * .12s); }
+  .tick { width: 9px; height: 9px; flex: none; border: 1.5px solid var(--k-green); transform: translateY(-1px); transition: background .3s; }
+  .case[aria-selected="true"] .tick { background: var(--k-green); transition-delay: calc(.4s + var(--k) * .12s); }
+  .bar { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; }
+  .bar span { display: block; height: 100%; background: var(--k-orange); transform: scaleX(0); transform-origin: 0 50%; }
+  .case[aria-selected="true"] .bar span { animation: fill var(--dur, 8s) linear forwards; }
+  .cases.paused .case[aria-selected="true"] .bar span { animation-play-state: paused; }
   @keyframes fill { to { transform: scaleX(1); } }
-  @media (max-width: 620px) { .tab { grid-template-columns: 1fr; } }
 
-  .canvas { position: relative; border: 1px solid var(--k-line); background: var(--k-surface);
-    background-image: radial-gradient(circle, color-mix(in srgb, var(--k-graphite) 30%, transparent) 1px, transparent 1.4px); background-size: 20px 20px; overflow-x: auto; }
-  svg { width: 100%; min-width: 640px; height: auto; padding: 18px; }
-  .tiers text { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; fill: var(--k-graphite); }
-
-  .edge { fill: none; stroke: var(--k-graphite); stroke-width: 1.5; stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 1.1s var(--ease), opacity .5s, stroke .3s; transition-delay: calc(.35s + var(--i) * 60ms); }
-  .map.in .edge { stroke-dashoffset: 0; }
-  .node { cursor: pointer; opacity: 0; transition: opacity .6s var(--ease), transform .6s var(--ease); transition-delay: calc(var(--i) * 45ms); outline: none; }
-  .map.in .node { opacity: 1; }
-  .node rect { fill: var(--k-paper); stroke: var(--k-ink); stroke-width: 1.5; transition: fill .3s, stroke .3s; }
-  .node.t0 rect { fill: var(--k-ink); }
-  .node.t0 text { fill: var(--k-paper); font-family: var(--k-font-header); font-size: 21px; }
-  .node.t1 text { fill: var(--k-ink); font-family: var(--k-font-body); font-size: 19px; font-weight: 600; }
-  .node.t2 text { fill: var(--k-ink); font-family: var(--k-font-mono); font-size: 13.5px; }
-  .node:hover rect, .node:focus-visible rect { stroke: var(--k-orange); stroke-width: 2.5; }
-  .badge, .agent, .ask, .feed { opacity: 0; transition: opacity .5s var(--ease); }
-  .badge rect { fill: var(--k-orange); stroke: none; }
-  .badge text { fill: #121212; font-family: var(--k-font-mono); font-size: 11px; }
-  .agent rect { fill: var(--k-orange); }
-  .agent .a1 { font-family: var(--k-font-header); font-size: 22px; fill: #121212; }
-  .agent .a2 { font-family: var(--k-font-mono); font-size: 11px; fill: #121212; }
-  .feed { fill: none; stroke: var(--k-orange); stroke-width: 2; stroke-dasharray: 5 7; }
-  .ask rect { fill: var(--k-ink); }
-  .ask text { fill: var(--k-paper); font-family: var(--k-font-body); font-size: 16px; font-weight: 600; }
-
-  /* 02 · slice: everything but the slice steps back; the slice flows to the agent */
-  .map[data-step="1"] .node:not(.slice), .map[data-step="1"] .edge:not(.slice) { opacity: .18; }
-  .map[data-step="1"] .node.slice rect { stroke: var(--k-orange); stroke-width: 2.5; }
-  .map[data-step="1"] .edge.slice { stroke: var(--k-orange); stroke-width: 2.5; }
-  .map[data-step="1"] .agent, .map[data-step="1"] .feed { opacity: 1; }
-  .map[data-step="1"] .feed { animation: flow 1s linear infinite; }
-  @keyframes flow { to { stroke-dashoffset: -24; } }
-
-  /* 03 · current: a change lands, the map re-checks, Kraddle asks one question */
-  .map[data-step="2"] .changed .badge, .map[data-step="2"] .ask { opacity: 1; }
-  .map[data-step="2"] .changed rect { animation: beat 1.4s var(--ease) infinite; }
-  .map[data-step="2"] .edge.touched { stroke: var(--k-orange); animation: redraw 1.6s var(--ease) infinite; }
-  @keyframes beat { 50% { fill: var(--k-orange-tint); } }
-  @keyframes redraw { 0% { stroke-dashoffset: 1; } 60%, 100% { stroke-dashoffset: 0; } }
-
-  .tip { position: absolute; z-index: 2; max-width: 260px; padding: 10px 12px; background: var(--k-ink); color: var(--k-paper); font-size: 14.5px; line-height: 1.4; pointer-events: none; display: flex; flex-direction: column; gap: 2px; transform: translate(-50%, calc(-100% - 12px)); }
-  .tip b { font-family: var(--k-font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--k-orange); font-weight: 500; }
-
-  .lines { position: relative; min-height: 64px; text-align: center; }
-  .line { position: absolute; inset: 0; margin-inline: auto; max-width: 52ch; font-size: clamp(18px, 1.7vw, 21px); color: var(--k-graphite); opacity: 0; transform: translateY(8px); transition: opacity .4s, transform .5s var(--ease); }
-  .line.on { opacity: 1; transform: none; }
+  .stage { position: sticky; top: 100px; display: grid; }
+  .shot { grid-area: 1 / 1; opacity: 0; transform: scale(.98) translateY(10px); transition: opacity .5s var(--ease), transform .7s var(--ease); pointer-events: none; }
+  .shot.on { opacity: 1; transform: none; pointer-events: auto; }
+  .shot :global(.slot) { box-shadow: 0 40px 80px -50px color-mix(in srgb, var(--k-ink) 60%, transparent); }
 </style>

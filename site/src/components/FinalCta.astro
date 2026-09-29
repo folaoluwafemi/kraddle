@@ -2,13 +2,12 @@
 import WaitlistForm from './WaitlistForm.astro';
 import Rise from './Rise.astro';
 ---
-<section class="final stage-inv" id="use">
+<section class="final" id="use">
   <canvas class="field" data-dotfield="center" aria-hidden="true"></canvas>
-  <div class="veil" aria-hidden="true"></div>
   <div class="wrap inner">
-    <Rise lines={['Build what’s in your head.', 'Kraddle holds the rest.']} accentLast />
-    <div class="form" data-reveal style="--d:.3s"><WaitlistForm id="end" note="One email when your spot is ready. Nothing else." /></div>
-    <ul class="where" data-reveal style="--d:.4s">
+    <Rise lines={['Build what’s in your head.', 'Kraddle holds the rest.']} accentLast clear />
+    <div class="form" data-reveal data-clear style="--d:.3s"><WaitlistForm id="end" note="One email when your spot is ready. Nothing else." /></div>
+    <ul class="where" data-reveal data-clear style="--d:.4s">
       <li><span class="mono">Zed</span><em>soon</em></li>
       <li><span class="mono">Desktop app</span><em>soon</em></li>
       <li><span class="mono">Beyond code</span><em>later</em></li>
@@ -17,17 +16,15 @@ import Rise from './Rise.astro';
 </section>
 
 <style>
-  .final { position: relative; overflow: hidden; padding-block: clamp(120px, 16vw, 220px); }
-  .field { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--inv-fg); --field-faint: var(--inv-muted); opacity: .9; }
-  .veil { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 50% 55% at 50% 50%, var(--inv-bg) 30%, color-mix(in srgb, var(--inv-bg) 0%, transparent) 80%); }
+  .final { position: relative; overflow: hidden; padding-block: clamp(120px, 16vw, 220px); border-top: 1px solid var(--k-line); }
+  .field { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--k-ink); --field-faint: var(--k-graphite); }
   .inner { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 36px; pointer-events: none; }
   .inner > * { pointer-events: auto; }
   .inner :global(h2) { font-size: clamp(44px, 7vw, 104px); line-height: 1; letter-spacing: -.035em; }
-  .inner :global(.accent) { color: var(--k-orange); }
   .form :global(.fields) { justify-content: center; }
   .form :global(.status) { text-align: center; }
   .where { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
-  .where li { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--inv-line); font-size: 13px; transition: border-color .3s, transform .4s var(--ease); }
+  .where li { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--k-line); background: var(--k-paper); font-size: 13px; transition: border-color .3s, transform .4s var(--ease); }
   .where li:hover { border-color: var(--k-orange); transform: translateY(-2px); }
-  .where em { font-style: normal; font-family: var(--k-font-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--k-orange); }
+  .where em { font-style: normal; font-family: var(--k-font-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--k-orange-text); }
 </style>

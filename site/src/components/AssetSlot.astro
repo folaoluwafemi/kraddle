@@ -1,0 +1,33 @@
+---
+// A slot for an image, illustration or recording. Until `src` is set it shows
+// what should go here, so assets can be made or generated to fit.
+interface Props {
+  kind: 'Illustration' | 'Screenshot' | 'Recording';
+  desc: string;
+  ratio?: string;
+  src?: string;
+  alt?: string;
+  class?: string;
+}
+const { kind, desc, ratio = '4 / 3', src, alt = desc, class: cls = '' } = Astro.props;
+const isVideo = src && /\.(mp4|webm|mov)$/i.test(src);
+---
+<figure class={`slot ${cls}`} style={`--ratio:${ratio}`}>
+  {src && isVideo && <video src={src} autoplay muted loop playsinline preload="metadata" aria-label={alt}></video>}
+  {src && !isVideo && <img src={src} alt={alt} loading="lazy" decoding="async" />}
+  {!src && (
+    <div class="ph">
+      <span class="k mono">{kind} · {ratio.replace(/\s/g, '')}</span>
+      <p>{desc}</p>
+    </div>
+  )}
+</figure>
+
+<style>
+  .slot { margin: 0; position: relative; aspect-ratio: var(--ratio); max-width: 100%; overflow: hidden; background: var(--slot-bg, var(--k-surface)); border: 1px solid var(--slot-line, var(--k-line)); color: var(--slot-fg, var(--k-ink)); }
+  img, video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ph { position: absolute; inset: 0; padding: 18px; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px;
+    background-image: radial-gradient(circle, color-mix(in srgb, currentColor 22%, transparent) 1px, transparent 1.4px); background-size: 16px 16px; }
+  .k { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; opacity: .7; }
+  .ph p { font-size: 14.5px; line-height: 1.4; max-width: 40ch; background: var(--slot-bg, var(--k-surface)); padding: 2px 0; }
+</style>

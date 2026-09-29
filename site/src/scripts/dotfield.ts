@@ -21,8 +21,42 @@ export function dotField(canvas: HTMLCanvasElement, opts: Options = {}) {
   const place = opts.place ?? 'right';
   const markScale = opts.markScale ?? 0.8;
 
-  type Dot = { x: number; y: number; on: boolean; r: number; heat: number; born: number };
+  type Dot = { x: number; y: number; on: boolean; r: number; heat: number; born: number; clear: number };
   let dots: Dot[] = [];
+
+  // Text stays readable: dots fade out around anything marked [data-clear]
+  // (headlines, paragraphs, forms, chips) inside the same section.
+  const host0 = canvas.parentElement as HTMLElement;
+  let clearRects: DOMRect[] = [];
+  const PAD = 18, FADE = 26;
+  const measureClear = () => {
+    const c = canvas.getBoundingClientRect();
+    const rects: DOMRect[] = [];
+    host0.querySelectorAll<HTMLElement>('[data-clear]').forEach((el) => {
+      // Controls clear their whole box; text clears only its glyph lines,
+      // so wide block wrappers and ragged lines don't erase the field.
+      el.querySelectorAll('input, button, li').forEach((b) => rects.push(b.getBoundingClientRect()));
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      const range = document.createRange();
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        if (!n.textContent?.trim()) continue;
+        range.selectNodeContents(n);
+        rects.push(...range.getClientRects());
+      }
+    });
+    clearRects = rects.filter((r) => r.width > 0).map((r) => new DOMRect(r.left - c.left, r.top - c.top, r.width, r.height));
+  };
+  const clearance = (x: number, y: number) => {
+    let k = 1;
+    for (const r of clearRects) {
+      const dx = Math.max(r.left - PAD - x, 0, x - (r.right + PAD));
+      const dy = Math.max(r.top - PAD - y, 0, y - (r.bottom + PAD));
+      const d = Math.hypot(dx, dy);
+      if (d === 0) return 0;
+      if (d < FADE) k = Math.min(k, d / FADE);
+    }
+    return k;
+  };
   let W = 0, H = 0, dpr = 1;
   let fg = '#121212', faint = '#6B6B66', orange = '#FF5A1F';
 
@@ -43,12 +77,13 @@ export function dotField(canvas: HTMLCanvasElement, opts: Options = {}) {
 
     // Fit the mark into a region of the canvas.
     const narrow = W < 900;
-    const mh = Math.min(H * (narrow ? 0.42 : markScale), W * (narrow ? 0.62 : 0.5));
+    const mh = Math.min(H * (narrow ? 0.42 : markScale), W * (narrow ? 0.62 : place === 'center' ? 0.4 : 0.34));
     const s = mh / BOX.h;
     const mw = BOX.w * s;
-    const x0 = place === 'center' ? (W - mw) / 2 : narrow ? W - mw - 8 : W - mw - Math.max(24, W * 0.06);
+    const x0 = place === 'center' ? (W - mw) / 2 : narrow ? W - mw - 8 : W - mw - Math.max(24, W * 0.04);
     const y0 = place === 'center' ? (H - mh) / 2 : narrow ? 12 : (H - mh) / 2;
 
+    measureClear();
     const prev = new Map(dots.map((d) => [`${Math.round(d.x)}:${Math.round(d.y)}`, d]));
     dots = [];
     const cx = x0 + mw / 2, cy = y0 + mh / 2;
@@ -57,7 +92,7 @@ export function dotField(canvas: HTMLCanvasElement, opts: Options = {}) {
         const fx = BOX.x + (x - x0) / s, fy = BOX.y + (y - y0) / s;
         const on = fx > BOX.x && fx < BOX.x + BOX.w && fy > BOX.y && fy < BOX.y + BOX.h && inMark(fx, fy);
         const old = prev.get(`${Math.round(x)}:${Math.round(y)}`);
-        dots.push({ x, y, on, r: old?.r ?? 0, heat: old?.heat ?? 0, born: Math.hypot(x - cx, y - cy) * 1.4 });
+        dots.push({ x, y, on, r: old?.r ?? 0, heat: old?.heat ?? 0, born: Math.hypot(x - cx, y - cy) * 1.4, clear: clearance(x, y) });
       }
     }
   };
@@ -79,6 +114,10 @@ export function dotField(canvas: HTMLCanvasElement, opts: Options = {}) {
 
   layout();
   new ResizeObserver(() => layout()).observe(canvas);
+  // Line boxes move once web fonts arrive.
+  document.fonts?.ready.then(() => layout());
+  // ...and again once headings have finished rising into place.
+  setTimeout(() => layout(), 1800);
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => setTimeout(readColors, 0));
 
   const LENS = 150;
@@ -108,7 +147,7 @@ export function dotField(canvas: HTMLCanvasElement, opts: Options = {}) {
       const target = d.on
         ? (5.2 * (1 + breathe) + 3 * f + 2.5 * wave)
         : (1.1 + 2.6 * f * f + 2.2 * wave);
-      d.r += (target * born - d.r) * 0.2;
+      d.r += (target * born * d.clear - d.r) * 0.2;
       d.heat = d.on && f > 0.45 ? Math.min(1, d.heat + 0.03) : d.heat * 0.985;
 
       if (d.r <= 0.05) continue;

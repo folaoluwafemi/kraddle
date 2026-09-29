@@ -34,13 +34,17 @@ document.querySelectorAll('[data-reveal], [data-scramble]').forEach((el) => reve
 /* ---------- nav: hides on the way down, returns on the way up; progress line ---------- */
 const nav = document.querySelector<HTMLElement>('[data-nav]');
 const progress = document.querySelector<HTMLElement>('[data-progress]');
-let lastY = window.scrollY;
+// Direction is decided over a run of scrolling, not per event, so smooth-scroll
+// wheels (many tiny deltas) don't flip the nav back and forth.
+let lastY = window.scrollY, run = 0;
 function onScroll() {
   const y = window.scrollY;
-  nav?.classList.toggle('scrolled', y > 8);
-  nav?.classList.toggle('tucked', y > 400 && y > lastY + 4);
-  if (y < lastY - 4) nav?.classList.remove('tucked');
+  const dy = y - lastY;
   lastY = y;
+  run = Math.sign(dy) === Math.sign(run) ? run + dy : dy;
+  nav?.classList.toggle('scrolled', y > 8);
+  if (y < 400 || run < -60) nav?.classList.remove('tucked');
+  else if (run > 60) nav?.classList.add('tucked');
   const max = document.documentElement.scrollHeight - window.innerHeight;
   progress?.style.setProperty('--p', String(max > 0 ? Math.min(1, y / max) : 0));
 }
@@ -61,7 +65,7 @@ if (finePointer && !reduce) {
 
 /* ---------- dot fields and the problem morph ---------- */
 document.querySelectorAll<HTMLCanvasElement>('[data-dotfield]').forEach((c) => {
-  dotField(c, { place: c.dataset.dotfield === 'center' ? 'center' : 'right', markScale: c.dataset.dotfield === 'center' ? 0.7 : 0.8 });
+  dotField(c, { place: c.dataset.dotfield === 'center' ? 'center' : 'right', markScale: c.dataset.dotfield === 'center' ? 0.72 : 0.74 });
 });
 document.querySelectorAll<HTMLElement>('[data-morph-section]').forEach((s) => morph(s));
 
@@ -127,9 +131,14 @@ function tabSet(root: HTMLElement, opts: { dur: number; onChange: (i: number) =>
   root.addEventListener('pointerleave', () => { hover = false; root.classList.remove('paused'); });
   root.addEventListener('keydown', (e) => {
     if (!(e.target as HTMLElement).matches('[role="tab"]')) return;
-    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+    if ((e.key === 'Enter' || e.key === ' ') && (e.target as HTMLElement).tagName !== 'BUTTON') {
       e.preventDefault();
-      go(i + (e.key === 'ArrowRight' ? 1 : -1), true);
+      (e.target as HTMLElement).click();
+      return;
+    }
+    if (['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
+      e.preventDefault();
+      go(i + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1), true);
       opts.tabs[i].focus();
     }
   });
@@ -140,41 +149,23 @@ function tabSet(root: HTMLElement, opts: { dur: number; onChange: (i: number) =>
   }, { threshold: 0.4 }).observe(root);
 }
 
-/* map: 01 map it · 02 slice it · 03 keep it current, plus node tooltips */
-document.querySelectorAll<HTMLElement>('[data-map]').forEach((map) => {
-  const lines = [...map.querySelectorAll<HTMLElement>('[data-line]')];
-  tabSet(map, {
-    dur: 5200,
-    tabs: [...map.querySelectorAll<HTMLElement>('[data-go]')],
-    onChange: (n) => { map.dataset.step = String(n); lines.forEach((l, k) => l.classList.toggle('on', k === n)); },
-  });
-  const tip = map.querySelector<HTMLElement>('[data-tip]');
-  const canvas = map.querySelector<HTMLElement>('.canvas');
-  if (!tip || !canvas) return;
-  const show = (node: SVGGElement) => {
-    const r = node.getBoundingClientRect(), c = canvas.getBoundingClientRect();
-    (tip.querySelector('b') as HTMLElement).textContent = node.dataset.label || '';
-    (tip.querySelector('span') as HTMLElement).textContent = node.dataset.limit || '';
-    tip.style.left = `${r.left - c.left + r.width / 2 + canvas.scrollLeft}px`;
-    tip.style.top = `${r.top - c.top}px`;
-    tip.hidden = false;
-  };
-  map.querySelectorAll<SVGGElement>('.node').forEach((n) => {
-    n.addEventListener('pointerenter', () => show(n));
-    n.addEventListener('focus', () => show(n));
-    n.addEventListener('pointerleave', () => { tip.hidden = true; });
-    n.addEventListener('blur', () => { tip.hidden = true; });
+/* use cases: one expands at a time, with its recording or screenshot */
+document.querySelectorAll<HTMLElement>('[data-cases]').forEach((root) => {
+  const shots = [...root.querySelectorAll<HTMLElement>('[data-shot]')];
+  tabSet(root, {
+    dur: 8000,
+    tabs: [...root.querySelectorAll<HTMLElement>('[data-go]')],
+    onChange: (n) => shots.forEach((s, k) => s.classList.toggle('on', k === n)),
   });
 });
 
-/* showcase: three windows, each plays its own little sequence */
+/* showcase: the desktop app switches modes; each mode plays its own little sequence */
 document.querySelectorAll<HTMLElement>('[data-show]').forEach((show) => {
   const panels = [...show.querySelectorAll<HTMLElement>('[data-panel]')];
+  const ipanels = [...show.querySelectorAll<HTMLElement>('[data-ipanel]')];
   const caps = [...show.querySelectorAll<HTMLElement>('[data-cap]')];
-  const title = show.querySelector<HTMLElement>('[data-title]');
-  const titles = ['checkout · agent', 'checkout · ideas', 'price.tsx · editor'];
   tabSet(show, {
-    dur: 7000,
+    dur: 7500,
     tabs: [...show.querySelectorAll<HTMLElement>('[data-go]')],
     onChange: (n) => {
       panels.forEach((p, k) => {
@@ -182,22 +173,18 @@ document.querySelectorAll<HTMLElement>('[data-show]').forEach((show) => {
         p.classList.remove('play');
         if (k === n) { void p.offsetWidth; p.classList.add('play'); }
       });
+      ipanels.forEach((p, k) => p.classList.toggle('on', k === n));
       caps.forEach((c, k) => c.classList.toggle('on', k === n));
-      if (title) title.textContent = titles[n];
     },
-  });
-  // collapsible context card
-  show.querySelectorAll<HTMLButtonElement>('[data-toggle]').forEach((b) => {
-    b.addEventListener('click', () => b.setAttribute('aria-expanded', String(b.getAttribute('aria-expanded') !== 'true')));
   });
   // gentle 3D tilt toward the cursor
   const tilt = show.querySelector<HTMLElement>('[data-tilt]');
-  const win = tilt?.querySelector<HTMLElement>('.window');
+  const win = tilt?.querySelector<HTMLElement>('.app');
   if (tilt && win && finePointer && !reduce) {
     tilt.addEventListener('pointermove', (e) => {
       const r = tilt.getBoundingClientRect();
-      win.style.setProperty('--ry', `${((e.clientX - r.left) / r.width - 0.5) * 5}deg`);
-      win.style.setProperty('--rx', `${-((e.clientY - r.top) / r.height - 0.5) * 4}deg`);
+      win.style.setProperty('--ry', `${((e.clientX - r.left) / r.width - 0.5) * 3}deg`);
+      win.style.setProperty('--rx', `${-((e.clientY - r.top) / r.height - 0.5) * 2.5}deg`);
     });
     tilt.addEventListener('pointerleave', () => { win.style.setProperty('--ry', '0deg'); win.style.setProperty('--rx', '0deg'); });
   }
@@ -220,20 +207,33 @@ document.querySelectorAll<HTMLElement>('[data-taste]').forEach((t) => {
 });
 
 /* ---------- footer: the giant wordmark thins out around the cursor ---------- */
+// Weights are eased every frame with fractional values (variable fonts accept
+// any weight between 100 and 900), so the letters glide instead of stepping.
 const giant = document.querySelector<HTMLElement>('[data-giant]');
 if (giant && finePointer && !reduce) {
-  const chars = [...giant.querySelectorAll<HTMLElement>('.ch')];
-  giant.addEventListener('pointermove', (e) => {
-    for (const ch of chars) {
-      const r = ch.getBoundingClientRect();
-      const d = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
-      const f = Math.max(0, 1 - d / (r.width * 2.4));
-      ch.style.fontWeight = String(Math.round(800 - f * 650));
-      ch.classList.toggle('hot', f > 0.7);
-      ch.style.transform = `translateY(${-f * 6}px)`;
-    }
+  const chars = [...giant.querySelectorAll<HTMLElement>('.ch')].map((el) => ({ el, f: 0, cx: 0, cy: 0, w: 1 }));
+  let px = -1e4, py = -1e4, running = false, raf = 0;
+  const measure = () => chars.forEach((c) => {
+    const r = c.el.getBoundingClientRect();
+    c.cx = r.left + r.width / 2; c.cy = r.top + r.height / 2; c.w = r.width;
   });
-  giant.addEventListener('pointerleave', () => chars.forEach((ch) => { ch.style.fontWeight = ''; ch.style.transform = ''; ch.classList.remove('hot'); }));
+  const tick = () => {
+    let moving = false;
+    for (const c of chars) {
+      const d = Math.hypot(px - c.cx, py - c.cy);
+      const target = Math.max(0, 1 - d / (c.w * 2.6));
+      const eased = target * target * (3 - 2 * target); // smoothstep
+      c.f += (eased - c.f) * 0.14;
+      if (Math.abs(eased - c.f) > 0.001) moving = true;
+      c.el.style.setProperty('--f', c.f.toFixed(4));
+    }
+    raf = moving || running ? requestAnimationFrame(tick) : 0;
+  };
+  const start = () => { if (!raf) raf = requestAnimationFrame(tick); };
+  giant.addEventListener('pointerenter', () => { measure(); running = true; start(); });
+  giant.addEventListener('pointermove', (e) => { px = e.clientX; py = e.clientY; });
+  giant.addEventListener('pointerleave', () => { running = false; px = py = -1e4; start(); });
+  window.addEventListener('scroll', () => { if (running) measure(); }, { passive: true });
 }
 document.querySelector('[data-up]')?.addEventListener('click', (e) => {
   e.preventDefault();

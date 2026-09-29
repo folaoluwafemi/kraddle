@@ -2,218 +2,332 @@
 import Mark from './Mark.astro';
 import Rise from './Rise.astro';
 
-const tabs = [
-  { key: 'context', title: 'Context', caption: 'The agent starts every step with exactly what it needs.' },
-  { key: 'ideas', title: 'Ideas', caption: 'Brainstorm inside what you’ve already chosen.' },
-  { key: 'taste', title: 'Taste', caption: 'Write down why once. See it in every change.' },
+const modes = [
+  { title: 'Agent', caption: 'Every step starts with exactly what it needs.' },
+  { title: 'Ideas', caption: 'Brainstorm inside what you’ve already chosen.' },
+  { title: 'Taste', caption: 'Write down why once. See it in every change.' },
 ];
 const context = [
   ['Prices are only calculated on the server', 'api/pricing.ts'],
-  ['Discounts apply before tax', 'you, 3 weeks ago'],
+  ['Discounts apply before tax', 'you · 3 weeks ago'],
   ['Checkout keeps its step order', 'checkout/flow.ts'],
-  ['Client-side totals were tried and dropped', 'git history'],
+  ['Client-side totals were tried and dropped', 'history · March'],
 ];
+const affects = [['Refunds', 90], ['Payouts', 75], ['Receipt emails', 35], ['Checkout screen', 20]] as const;
+const heuristics = [
+  ['One component, many looks', 23, true],
+  ['Errors say how to fix them', 41, false],
+  ['Server owns the money', 17, false],
+  ['No new dependency without a reason', 9, false],
+] as const;
 ---
 <section class="section stage-orange showcase" id="see">
   <div class="dots" aria-hidden="true"></div>
   <div class="wrap">
     <div class="head">
       <p class="label" data-scramble data-reveal>In practice</p>
-      <Rise lines={['Feels like the tools', 'you already use.']} />
+      <Rise lines={['One calm place', 'to build.']} />
     </div>
 
-    <div class="show" data-show data-active="0">
-      <div class="pills" role="tablist" aria-label="Examples">
-        {tabs.map((t, i) => (
-          <button type="button" role="tab" class="pill" aria-selected={i === 0 ? 'true' : 'false'} data-go={i}>
-            {t.title}<span class="bar" aria-hidden="true"><span></span></span>
-          </button>
-        ))}
-      </div>
-
+    <div class="show" data-show>
       <div class="tilt" data-tilt>
-        <div class="window">
-          <div class="chrome">
+        <div class="app" role="img" aria-label="The Kraddle desktop app: projects and sessions on the left, an agent session in the middle, and the context for the current step on the right">
+          <div class="bar">
             <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
-            <span class="title mono" data-title>checkout · agent</span>
-            <span class="kr mono"><Mark /> kraddle</span>
+            <span class="where mono">acme-shop</span>
+            <span class="ok mono"><i></i>Up to date</span>
+            <span class="me">F</span>
           </div>
 
-          <!-- 1 · agent panel -->
-          <div class="panel agent on" data-panel="0">
-            <div class="msg me"><p>Add a discount code field to checkout</p></div>
-            <div class="typing" aria-hidden="true"><i></i><i></i><i></i></div>
-            <div class="ctx" data-seq>
-              <button type="button" class="ctx-head" aria-expanded="true" data-toggle>
-                <span class="kmark"><Mark /></span>
-                <span><b>Context from Kraddle</b><span class="muted"> · 4 things this step needs</span></span>
-                <span class="chev" aria-hidden="true">⌄</span>
-              </button>
-              <ul class="ctx-list">
-                {context.map(([what, from], i) => <li style={`--i:${i}`}><span class="tick" aria-hidden="true"></span><span>{what}</span><span class="from mono">{from}</span></li>)}
+          <div class="body">
+            <aside class="side">
+              <div class="brand"><Mark /><span class="mono">kraddle</span></div>
+              <div class="search"><span>Search</span><kbd class="mono">⌘K</kbd></div>
+              <p class="grp mono">Projects</p>
+              <ul>
+                <li class="on"><i style="background:#FF5A1F"></i>acme-shop</li>
+                <li><i style="background:#3C9A5F"></i>portfolio-site</li>
+                <li><i style="background:#6B6B66"></i>side-quest</li>
               </ul>
-              <p class="skipped mono">1,314 other facts skipped. Not needed for this step.</p>
-            </div>
-            <div class="tool t1" data-seq><span class="ico" aria-hidden="true">✎</span><span class="mono">ui/Checkout.tsx</span><span class="add mono">+18</span><span class="del mono">−2</span></div>
-            <div class="tool t2" data-seq><span class="ico" aria-hidden="true">✎</span><span class="mono">api/pricing.ts</span><span class="add mono">+11</span><span class="del mono">−0</span></div>
-            <div class="msg bot" data-seq><p>Done. Two files changed, nothing else touched.</p>
-              <div class="held"><span class="chip mono">held · step order</span><span class="chip mono">held · server-side prices</span></div>
-            </div>
-            <div class="composer" aria-hidden="true"><span>Ask the agent…</span><span class="send">↑</span></div>
-          </div>
-
-          <!-- 2 · ideation chat -->
-          <div class="panel ideas" data-panel="1" data-ideation>
-            <div class="row me"><span class="avatar you mono">you</span><div class="bubble"><p>What if people could pay in crypto at checkout?</p></div></div>
-            <div class="row"><span class="avatar k"><Mark /></span><div class="bubble k">
-              <p>Payments are Stripe-only right now, chosen in March to keep refunds simple. Crypto would need a second refund flow and payouts in two currencies.</p>
-              <div class="choices">
-                <button type="button" class="choice" data-choice="explore">Explore it anyway</button>
-                <button type="button" class="choice" data-choice="park">Park it for later</button>
+              <p class="grp mono">Sessions</p>
+              <ul>
+                <li class="on"><span class="live"></span>Discount codes</li>
+                <li><span class="parked mono">parked</span>Crypto payments</li>
+                <li><span class="done">✓</span>Price components</li>
+              </ul>
+              <div class="foot">
+                <span>Heuristics <b class="mono">12</b></span>
+                <span>Settings</span>
               </div>
-            </div></div>
-            <div class="row reply" data-reply="explore" hidden><span class="avatar k"><Mark /></span><div class="bubble k"><p>Okay. Refunds, payouts and receipt emails would change. I’ll draft a plan that keeps Stripe as the default.</p></div></div>
-            <div class="row reply" data-reply="park" hidden><span class="avatar k"><Mark /></span><div class="bubble k"><p><span class="chip mono">held</span> Parked. I’ll bring it back the next time payments come up.</p></div></div>
-            <div class="composer" aria-hidden="true"><span>Try an idea…</span><span class="send">↑</span></div>
-          </div>
+            </aside>
 
-          <!-- 3 · editor with a heuristic -->
-          <div class="panel taste" data-panel="2" data-taste>
-            <div class="ed">
-              <div class="ftab mono">heuristics/components.md</div>
-              <pre class="code mono" data-h><span class="ln">1</span><span class="hl"># One component, many looks</span>
-<span class="ln">2</span>
-<span class="ln">3</span>Prefer one component with a
-<span class="ln">4</span>variant over near-copies of it.
-<span class="ln">5</span>
-<span class="ln">6</span><span class="hl">Why:</span> copies drift, and drift
-<span class="ln">7</span>is where bugs live.</pre>
-            </div>
-            <div class="ed">
-              <div class="ftab mono">src/ui/price.tsx <span class="applied">applied · one component, many looks</span></div>
-              <pre class="code mono"><span class="ln">1</span><span class="d">export function PriceTag()   {'{'} … {'}'}</span>
+            <main class="main">
+              <header class="mhead">
+                <div>
+                  <p class="stitle">Discount codes</p>
+                  <p class="ssub mono">session · started 4 min ago</p>
+                </div>
+                <div class="seg" role="tablist" aria-label="Modes">
+                  {modes.map((m, i) => (
+                    <button type="button" role="tab" aria-selected={i === 0 ? 'true' : 'false'} data-go={i}>{m.title}<span class="bar2" aria-hidden="true"><span></span></span></button>
+                  ))}
+                </div>
+              </header>
+
+              <div class="panes">
+                <!-- Agent -->
+                <div class="pane agent on" data-panel="0">
+                  <div class="msg me"><p>Add a discount code field to checkout</p></div>
+                  <div class="typing" aria-hidden="true"><i></i><i></i><i></i></div>
+                  <div class="plan" data-seq>
+                    <p class="ph mono">Plan</p>
+                    <ul>
+                      <li style="--i:0"><span class="c"></span>Add a code field to the checkout screen</li>
+                      <li style="--i:1"><span class="c"></span>Apply the discount on the server, before tax</li>
+                      <li style="--i:2"><span class="c"></span>Keep the step order as it is</li>
+                    </ul>
+                  </div>
+                  <div class="file t1" data-seq>
+                    <div class="fh"><span class="mono">ui/Checkout.tsx</span><span class="add mono">+18</span><span class="del mono">−2</span></div>
+                    <pre class="mono"><span class="a">+ &lt;DiscountField onApply={'{'}applyCode{'}'} /&gt;</span></pre>
+                  </div>
+                  <div class="file t2" data-seq>
+                    <div class="fh"><span class="mono">api/pricing.ts</span><span class="add mono">+11</span><span class="del mono">−0</span></div>
+                    <pre class="mono"><span class="a">+ export function applyDiscount(total, code) {'{'}</span></pre>
+                  </div>
+                  <div class="msg bot" data-seq><p>Done. Two files changed, nothing else touched.</p></div>
+                </div>
+
+                <!-- Ideas -->
+                <div class="pane ideas" data-panel="1" data-ideation>
+                  <div class="msg me"><p>What if people could pay in crypto?</p></div>
+                  <div class="msg bot k">
+                    <p>Payments are Stripe-only right now, chosen in March to keep refunds simple. Crypto would need a second refund flow and payouts in two currencies.</p>
+                    <div class="choices">
+                      <button type="button" class="choice" data-choice="explore">Explore it anyway</button>
+                      <button type="button" class="choice" data-choice="park">Park it for later</button>
+                    </div>
+                  </div>
+                  <div class="msg bot reply" data-reply="explore" hidden><p>Okay. I’ll draft a plan that keeps Stripe as the default and adds crypto beside it.</p></div>
+                  <div class="msg bot reply" data-reply="park" hidden><p><span class="held mono">held</span> Parked. I’ll bring it back the next time payments come up.</p></div>
+                  <div class="dirs">
+                    <div class="dir cur"><span class="mono">current</span><b>Stripe only</b></div>
+                    <div class="dir new"><span class="mono">exploring</span><b>Stripe + crypto</b></div>
+                  </div>
+                </div>
+
+                <!-- Taste -->
+                <div class="pane taste" data-panel="2" data-taste>
+                  <ul class="hlist">
+                    {heuristics.map(([name, n, on]) => <li class={on ? 'on' : ''}><span>{name}</span><span class="mono cnt">{n}×</span></li>)}
+                  </ul>
+                  <div class="code">
+                    <div class="ctab mono">src/ui/price.tsx <span class="applied">one component, many looks</span></div>
+                    <pre class="mono"><span class="ln">1</span><span class="d">export function PriceTag()   {'{'} … {'}'}</span>
 <span class="ln">2</span><span class="d">export function PriceLabel() {'{'} … {'}'}</span>
 <span class="ln">3</span><span class="d">export function PriceBadge() {'{'} … {'}'}</span>
 <span class="ln">4</span><span class="a">export function Price({'{'} variant {'}'}) {'{'} … {'}'}</span></pre>
-            </div>
+                    <p class="why"><b class="mono">Why</b> Copies drift, and drift is where bugs live.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="composer" aria-hidden="true">
+                <span>Ask, or type / for commands</span>
+                <span class="model mono">any model ▾</span>
+                <span class="send">↑</span>
+              </div>
+            </main>
+
+            <aside class="insp">
+              <div class="ipane on" data-ipanel="0">
+                <p class="grp mono">This step</p>
+                <div class="read"><span class="readout big">04</span><span class="mono small">of 1,318 facts<br />in context</span></div>
+                <ul class="ctx">
+                  {context.map(([what, from], i) => <li style={`--i:${i}`}><span class="dot"></span><span><b>{what}</b><span class="mono src">{from}</span></span></li>)}
+                </ul>
+                <p class="skip mono">1,314 skipped · not needed</p>
+              </div>
+              <div class="ipane" data-ipanel="1">
+                <p class="grp mono">Would affect</p>
+                <ul class="impact">
+                  {affects.map(([n, v]) => <li><span>{n}</span><span class="meter"><span style={`--v:${v}%`}></span></span></li>)}
+                </ul>
+                <p class="skip mono">Nothing changes until you choose.</p>
+              </div>
+              <div class="ipane" data-ipanel="2">
+                <p class="grp mono">Applied recently</p>
+                <ul class="recent">
+                  <li><b>price.tsx</b><span class="mono src">today · merged 3 near-copies</span></li>
+                  <li><b>Button.tsx</b><span class="mono src">yesterday · variants, not copies</span></li>
+                  <li><b>Badge.tsx</b><span class="mono src">last week · one badge, four looks</span></li>
+                </ul>
+              </div>
+            </aside>
           </div>
         </div>
       </div>
 
       <div class="caps">
-        {tabs.map((t, i) => <p class={`cap${i === 0 ? ' on' : ''}`} data-cap={i}>{t.caption}</p>)}
+        {modes.map((m, i) => <p class={`cap${i === 0 ? ' on' : ''}`} data-cap={i}>{m.caption}</p>)}
       </div>
     </div>
   </div>
 </section>
 
 <style>
-  .showcase { position: relative; overflow: hidden; --k-graphite: #3A1A0C; }
+  .showcase { position: relative; overflow: hidden; }
   .showcase .head :global(h2) { color: #121212; }
   .showcase .label { color: #3A1A0C; }
   .dots { position: absolute; inset: 0; background-image: radial-gradient(circle, rgba(18,18,18,.16) 1.3px, transparent 1.7px); background-size: 22px 22px; mask-image: radial-gradient(ellipse at 50% 60%, #000 20%, transparent 75%); pointer-events: none; }
-  .show { position: relative; max-width: 1000px; margin-inline: auto; display: flex; flex-direction: column; align-items: center; gap: 28px; }
+  .show { position: relative; max-width: 1180px; margin-inline: auto; display: flex; flex-direction: column; align-items: center; gap: 28px; }
+  .tilt { width: 100%; perspective: 1600px; }
 
-  .pills { display: inline-flex; padding: 5px; gap: 4px; background: rgba(18,18,18,.1); }
-  .pill { all: unset; cursor: pointer; position: relative; padding: 10px 22px; font-family: var(--k-font-mono); font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: #121212; overflow: hidden; transition: background .3s, color .3s; }
-  .pill[aria-selected="true"] { background: #121212; color: #EEEEEA; }
-  .pill:focus-visible { outline: 2px solid #121212; outline-offset: 2px; }
-  .pill .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; }
-  .pill .bar span { display: block; height: 100%; background: #FF5A1F; transform: scaleX(0); transform-origin: 0 50%; }
-  .pill[aria-selected="true"] .bar span { animation: fill var(--dur, 7s) linear forwards; }
-  .show.paused .pill[aria-selected="true"] .bar span { animation-play-state: paused; }
+  .app {
+    --bg: #FBFBF9; --side: #F2F2EE; --line: #E4E4DE; --muted: #74746E; --ink: #121212; --soft: #F6F6F3;
+    background: var(--bg); color: var(--ink); border-radius: 10px; overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(18,18,18,.18), 0 60px 110px -50px rgba(18,18,18,.6), 0 20px 40px -30px rgba(18,18,18,.35);
+    transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform .5s var(--ease);
+    font-size: 14px;
+  }
+  .bar { display: flex; align-items: center; gap: 14px; height: 40px; padding: 0 14px; background: var(--side); border-bottom: 1px solid var(--line); }
+  .lights { display: flex; gap: 7px; }
+  .lights i { width: 11px; height: 11px; border-radius: 50%; background: #D8D8D2; }
+  .where { flex: 1; text-align: center; font-size: 12px; color: var(--muted); }
+  .ok { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: #2F7D4C; background: #E3EFE6; padding: 3px 8px; border-radius: 999px; }
+  .ok i { width: 6px; height: 6px; border-radius: 50%; background: #3C9A5F; animation: pulse 2s var(--ease) infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .me { width: 24px; height: 24px; border-radius: 50%; background: #121212; color: #F2F2EE; display: grid; place-items: center; font-size: 11px; font-weight: 600; }
+
+  .body { display: grid; grid-template-columns: 210px minmax(0, 1fr) 270px; height: clamp(520px, 50vw, 600px); }
+  @media (max-width: 1000px) { .body { grid-template-columns: 190px minmax(0, 1fr); } .insp { display: none; } }
+  @media (max-width: 700px) { .body { grid-template-columns: 1fr; height: 560px; } .side { display: none; } }
+
+  /* sidebar */
+  .side { background: var(--side); border-right: 1px solid var(--line); padding: 14px 12px; display: flex; flex-direction: column; gap: 6px; }
+  .brand { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 800; letter-spacing: -.05em; margin-bottom: 8px; }
+  .brand :global(.mark) { width: 13px; height: auto; overflow: visible; }
+  .search { display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+  kbd { font-size: 10.5px; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; background: var(--soft); }
+  .grp { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 10px 6px 4px; }
+  .side ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  .side li { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 6px; font-size: 13.5px; color: #3A3A36; transition: background .2s; }
+  .side li:hover { background: rgba(18,18,18,.05); }
+  .side li.on { background: var(--bg); color: var(--ink); box-shadow: 0 1px 0 rgba(18,18,18,.06), 0 0 0 1px var(--line); }
+  .side li i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .live { width: 8px; height: 8px; border-radius: 50%; background: #FF5A1F; box-shadow: 0 0 0 3px rgba(255,90,31,.2); flex: none; }
+  .parked { font-size: 9px; padding: 1px 5px; border-radius: 4px; background: #FFE3D8; color: #C4420E; letter-spacing: .04em; }
+  .done { color: #3C9A5F; font-size: 12px; width: 8px; }
+  .foot { margin-top: auto; display: flex; flex-direction: column; gap: 4px; padding: 10px 8px 2px; border-top: 1px solid var(--line); font-size: 13px; color: #3A3A36; }
+  .foot b { font-size: 11px; font-weight: 500; color: var(--muted); margin-left: 4px; }
+
+  /* main */
+  .main { display: flex; flex-direction: column; min-width: 0; position: relative; }
+  .mhead { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+  .stitle { font-weight: 600; font-size: 15.5px; }
+  .ssub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .seg { display: inline-flex; padding: 3px; background: var(--side); border: 1px solid var(--line); border-radius: 8px; gap: 2px; }
+  .seg button { all: unset; cursor: pointer; position: relative; overflow: hidden; padding: 6px 13px; border-radius: 6px; font-size: 13px; color: var(--muted); transition: background .25s, color .25s, box-shadow .25s; }
+  .seg button:hover { color: var(--ink); }
+  .seg button[aria-selected="true"] { background: var(--bg); color: var(--ink); box-shadow: 0 1px 2px rgba(18,18,18,.12), 0 0 0 1px var(--line); }
+  .seg button:focus-visible { outline: 2px solid #FF5A1F; }
+  .bar2 { position: absolute; left: 8px; right: 8px; bottom: 2px; height: 2px; border-radius: 2px; overflow: hidden; }
+  .bar2 span { display: block; height: 100%; background: #FF5A1F; transform: scaleX(0); transform-origin: 0 50%; }
+  .seg button[aria-selected="true"] .bar2 span { animation: fill var(--dur, 7s) linear forwards; }
+  .show.paused .seg button[aria-selected="true"] .bar2 span { animation-play-state: paused; }
   @keyframes fill { to { transform: scaleX(1); } }
 
-  .tilt { width: 100%; perspective: 1400px; }
-  .window {
-    --wbg: #F8F8F6; --wfg: #121212; --wmuted: #6B6B66; --wline: #E2E2DC; --wsoft: #EEEEEA;
-    background: var(--wbg); color: var(--wfg); border: 1px solid rgba(18,18,18,.25);
-    box-shadow: 0 50px 90px -40px rgba(18,18,18,.55), 0 2px 0 rgba(18,18,18,.08);
-    transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform .5s var(--ease);
-    height: clamp(520px, 56vw, 600px); display: flex; flex-direction: column; overflow: hidden; position: relative;
-  }
-  .chrome { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-bottom: 1px solid var(--wline); background: var(--wsoft); flex: none; }
-  .lights { display: flex; gap: 7px; }
-  .lights i { width: 11px; height: 11px; border-radius: 50%; background: #D4D4CE; }
-  .title { font-size: 12px; color: var(--wmuted); flex: 1; text-align: center; }
-  .kr { font-size: 11px; color: var(--wmuted); display: inline-flex; gap: 6px; align-items: center; letter-spacing: .06em; }
-  .kr :global(.mark), .kmark :global(.mark), .avatar.k :global(.mark) { width: 12px; height: auto; overflow: visible; }
-
-  .panel { position: absolute; inset: 45px 0 0; padding: 22px clamp(16px, 4vw, 40px) 84px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; opacity: 0; visibility: hidden; transform: translateY(10px); transition: opacity .45s var(--ease), transform .6s var(--ease), visibility 0s .45s; }
-  .panel.on { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
-  .composer { position: absolute; left: clamp(16px, 4vw, 40px); right: clamp(16px, 4vw, 40px); bottom: 18px; display: flex; justify-content: space-between; align-items: center; padding: 12px 12px 12px 16px; border: 1px solid var(--wline); background: #fff; color: var(--wmuted); font-size: 15px; }
-  .send { width: 30px; height: 30px; display: grid; place-items: center; background: #121212; color: #EEEEEA; font-size: 15px; }
-
-  /* agent panel */
-  .msg { max-width: 82%; }
-  .msg p { font-size: 16.5px; line-height: 1.45; }
-  .msg.me { align-self: flex-end; background: #121212; color: #EEEEEA; padding: 11px 15px; }
-  .typing { display: flex; gap: 5px; padding: 6px 2px; }
-  .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--wmuted); animation: bob 1s var(--ease) infinite; }
+  .panes { position: relative; flex: 1; overflow: hidden; }
+  .pane { position: absolute; inset: 0; padding: 18px 20px 80px; display: flex; flex-direction: column; gap: 12px; opacity: 0; visibility: hidden; transform: translateY(8px); transition: opacity .4s var(--ease), transform .55s var(--ease), visibility 0s .4s; }
+  .pane.on { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+  .msg { max-width: 84%; border-radius: 10px; padding: 10px 13px; }
+  .msg p { font-size: 14.5px; line-height: 1.5; }
+  .msg.me { align-self: flex-end; background: #121212; color: #F2F2EE; border-bottom-right-radius: 3px; }
+  .msg.bot { background: var(--soft); border: 1px solid var(--line); border-bottom-left-radius: 3px; }
+  .msg.k { border-left: 3px solid #FF5A1F; }
+  .typing { display: flex; gap: 4px; padding: 4px 2px; }
+  .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: bob 1s var(--ease) infinite; }
   .typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
   @keyframes bob { 50% { transform: translateY(-4px); opacity: .4; } }
-  .ctx { border: 1px solid var(--wline); background: #fff; }
-  .ctx-head { all: unset; box-sizing: border-box; cursor: pointer; width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 14px; font-size: 15px; }
-  .ctx-head:focus-visible { outline: 2px solid #FF5A1F; }
-  .kmark { width: 22px; height: 22px; display: grid; place-items: center; background: #121212; color: #EEEEEA; flex: none; }
-  .muted { color: var(--wmuted); }
-  .chev { margin-left: auto; transition: transform .35s var(--ease); }
-  .ctx-head[aria-expanded="false"] .chev { transform: rotate(-90deg); }
-  .ctx-list { list-style: none; margin: 0; padding: 0 14px 4px; display: grid; gap: 0; overflow: hidden; transition: max-height .45s var(--ease), padding .3s; max-height: 260px; }
-  .ctx-head[aria-expanded="false"] + .ctx-list { max-height: 0; padding-bottom: 0; }
-  .ctx-list li { display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: center; padding: 7px 0; border-top: 1px solid var(--wline); font-size: 14.5px; }
-  .tick { width: 8px; height: 8px; background: #3C9A5F; }
-  .from { font-size: 11px; color: var(--wmuted); white-space: nowrap; }
-  .skipped { font-size: 11px; color: var(--wmuted); padding: 8px 14px 11px; border-top: 1px dashed var(--wline); }
-  .tool { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--wline); background: #fff; font-size: 13px; }
-  .ico { color: var(--wmuted); }
-  .add { color: #2F7D4C; margin-left: auto; font-size: 12px; }
-  .del { color: #B8410F; font-size: 12px; }
-  .msg.bot p { font-size: 16.5px; }
-  .held { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-  .chip { font-size: 11px; padding: 3px 8px; background: #DCEADF; color: #2F7D4C; }
-  /* sequence: hidden until the panel plays */
+  .plan { border: 1px solid var(--line); border-radius: 10px; padding: 10px 13px; background: var(--bg); }
+  .ph { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .plan ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .plan li { display: flex; align-items: center; gap: 9px; font-size: 13.5px; }
+  .c { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--line); flex: none; position: relative; transition: background .3s, border-color .3s; }
+  .c::after { content: ''; position: absolute; left: 4px; top: 1px; width: 4px; height: 7px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) scale(0); transition: transform .3s var(--ease); }
+  .agent.play .c { background: #3C9A5F; border-color: #3C9A5F; transition-delay: calc(1.6s + var(--i) * .35s); }
+  .agent.play .c::after { transform: rotate(45deg) scale(1); transition-delay: calc(1.6s + var(--i) * .35s); }
+  .file { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg); }
+  .fh { display: flex; align-items: center; gap: 10px; padding: 7px 12px; background: var(--soft); border-bottom: 1px solid var(--line); font-size: 12px; }
+  .add { color: #2F7D4C; margin-left: auto; font-size: 11.5px; }
+  .del { color: #B8410F; font-size: 11.5px; }
+  .file pre { margin: 0; padding: 8px 12px; font-size: 12px; white-space: pre-wrap; }
+  .a { color: #2F7D4C; background: #E3EFE6; }
   .agent [data-seq], .agent .typing { opacity: 0; transform: translateY(8px); transition: opacity .45s var(--ease), transform .55s var(--ease); }
   .agent.play .typing { animation: typingShow 1.1s var(--ease) forwards; }
   @keyframes typingShow { 0% { opacity: 0; transform: none; } 15%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; height: 0; padding: 0; } }
   .agent.play [data-seq] { opacity: 1; transform: none; }
-  .agent.play .ctx { transition-delay: 1.1s; }
-  .agent.play .tool.t1 { transition-delay: 1.8s; }
-  .agent.play .tool.t2 { transition-delay: 2.3s; }
-  .agent.play .msg.bot { transition-delay: 2.9s; }
-  .agent .ctx-list li { opacity: 0; transform: translateX(8px); transition: opacity .4s, transform .5s var(--ease); }
-  .agent.play .ctx-list li { opacity: 1; transform: none; transition-delay: calc(1.3s + var(--i) * .12s); }
+  .agent.play .plan { transition-delay: 1.1s; }
+  .agent.play .file.t1 { transition-delay: 2.8s; }
+  .agent.play .file.t2 { transition-delay: 3.3s; }
+  .agent.play .msg.bot { transition-delay: 3.9s; }
 
-  /* ideation chat */
-  .row { display: flex; gap: 12px; align-items: flex-start; }
-  .row.me { flex-direction: row-reverse; }
-  .avatar { width: 32px; height: 32px; flex: none; display: grid; place-items: center; font-size: 10px; text-transform: uppercase; }
-  .avatar.you { background: #D4D4CE; color: #121212; border-radius: 50%; }
-  .avatar.k { background: #121212; color: #EEEEEA; }
-  .bubble { max-width: 76%; padding: 12px 15px; background: #121212; color: #EEEEEA; }
-  .bubble.k { background: #fff; color: #121212; border: 1px solid var(--wline); border-left: 3px solid #FF5A1F; }
-  .bubble p { font-size: 16px; line-height: 1.45; }
-  .choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-  .choice { font: inherit; font-family: var(--k-font-mono); font-size: 12.5px; padding: 8px 12px; border: 1px solid #121212; background: transparent; color: #121212; cursor: pointer; transition: background .2s, color .2s, transform .3s var(--ease); }
-  .choice:hover { background: #121212; color: #EEEEEA; transform: translateY(-2px); }
-  .choice[aria-pressed="true"] { background: #FF5A1F; border-color: #FF5A1F; }
+  .choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .choice { font: inherit; font-size: 13px; padding: 7px 12px; border-radius: 7px; border: 1px solid #121212; background: var(--bg); color: #121212; cursor: pointer; transition: background .2s, color .2s, transform .3s var(--ease); }
+  .choice:hover { background: #121212; color: #F2F2EE; transform: translateY(-1px); }
+  .choice[aria-pressed="true"] { background: #FF5A1F; border-color: #FF5A1F; color: #121212; }
   .reply:not([hidden]) { animation: rise .5s var(--ease) both; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+  .held { font-size: 10.5px; padding: 1px 6px; border-radius: 4px; background: #E3EFE6; color: #2F7D4C; margin-right: 4px; }
+  .dirs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: auto; }
+  .dir { border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--line); background: var(--bg); transition: transform .4s var(--ease); }
+  .dir:hover { transform: translateY(-2px); }
+  .dir span { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .dir b { font-size: 15px; }
+  .dir.cur { border-color: #3C9A5F; box-shadow: inset 3px 0 0 #3C9A5F; }
+  .dir.new { border-style: dashed; border-color: #FF5A1F; }
 
-  /* editor */
-  .taste { flex-direction: row; gap: 0; padding: 0; }
-  .ed { flex: 1; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--wline); }
-  .ed:last-child { border-right: 0; }
-  .ftab { font-size: 12px; padding: 10px 16px; border-bottom: 1px solid var(--wline); color: var(--wmuted); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .applied { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; padding: 3px 7px; background: #DCEADF; color: #2F7D4C; transition: background .3s, color .3s; }
-  .code { margin: 0; padding: 16px; font-size: 13.5px; line-height: 1.9; white-space: pre-wrap; flex: 1; transition: background .3s; }
-  .ln { display: inline-block; width: 2.2ch; color: #B5B5AE; user-select: none; }
-  .hl { color: #C4420E; }
+  .taste { flex-direction: row; gap: 16px; }
+  .hlist { list-style: none; margin: 0; padding: 0; width: 42%; display: flex; flex-direction: column; gap: 6px; }
+  .hlist li { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); font-size: 13.5px; background: var(--bg); transition: border-color .3s, background .3s; }
+  .hlist li.on { border-color: #FF5A1F; background: #FFF3EE; }
+  .cnt { font-size: 11px; color: var(--muted); }
+  .code { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; background: var(--bg); }
+  .ctab { font-size: 11.5px; padding: 8px 12px; background: var(--soft); border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: var(--muted); }
+  .applied { font-size: 10px; padding: 2px 7px; border-radius: 4px; background: #E3EFE6; color: #2F7D4C; transition: background .3s, color .3s; }
+  .code pre { margin: 0; padding: 12px; font-size: 12px; line-height: 1.9; white-space: pre-wrap; flex: 1; }
+  .ln { display: inline-block; width: 2ch; color: #B5B5AE; }
   .d { color: #9A9A94; text-decoration: line-through; }
-  .a { color: #2F7D4C; font-weight: 700; background: #DCEADF; }
-  .taste:hover [data-h], .taste.lit [data-h] { background: #FFE3D8; }
+  .why { border-top: 1px dashed var(--line); padding: 10px 12px; font-size: 13px; color: #3A3A36; }
+  .why b { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #C4420E; font-weight: 500; margin-right: 6px; }
   .taste:hover .applied, .taste.lit .applied { background: #FF5A1F; color: #121212; }
-  @media (max-width: 720px) { .taste { flex-direction: column; } .ed { border-right: 0; border-bottom: 1px solid var(--wline); } .from { display: none; } }
+  .taste:hover .hlist li.on, .taste.lit .hlist li.on { background: #FFE3D8; }
+  @media (max-width: 700px) { .taste { flex-direction: column; } .hlist { width: 100%; } }
+
+  .composer { position: absolute; left: 16px; right: 16px; bottom: 14px; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--muted); font-size: 13.5px; box-shadow: 0 6px 20px -12px rgba(18,18,18,.25); }
+  .composer > span:first-child { flex: 1; }
+  .model { font-size: 11px; padding: 4px 8px; border-radius: 6px; background: var(--soft); border: 1px solid var(--line); }
+  .send { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; background: #FF5A1F; color: #121212; font-size: 14px; font-weight: 700; }
+
+  /* inspector */
+  .insp { border-left: 1px solid var(--line); background: var(--bg); position: relative; }
+  .ipane { position: absolute; inset: 0; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; opacity: 0; visibility: hidden; transition: opacity .4s var(--ease), visibility 0s .4s; overflow: hidden; }
+  .ipane.on { opacity: 1; visibility: visible; transition-delay: 0s; }
+  .insp .grp { margin: 0 0 4px; }
+  .read { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--soft); }
+  .big { font-size: 44px; color: #C4420E; }
+  .small { font-size: 11px; color: var(--muted); line-height: 1.4; }
+  .ctx, .impact, .recent { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .ctx li { display: grid; grid-template-columns: 10px 1fr; gap: 10px; align-items: start; font-size: 13px; line-height: 1.35; }
+  .ctx .dot { width: 7px; height: 7px; border-radius: 2px; background: #3C9A5F; margin-top: 5px; }
+  .ctx b, .recent b { display: block; font-weight: 600; }
+  .src { font-size: 10.5px; color: var(--muted); }
+  .skip { font-size: 10.5px; color: var(--muted); padding-top: 8px; border-top: 1px dashed var(--line); }
+  .impact li { display: grid; grid-template-columns: 1fr 90px; gap: 10px; align-items: center; font-size: 13px; }
+  .meter { height: 6px; border-radius: 3px; background: var(--side); overflow: hidden; }
+  .meter span { display: block; height: 100%; width: 0; background: #FF5A1F; border-radius: 3px; transition: width 1s var(--ease) .2s; }
+  .ipane.on .meter span { width: var(--v); }
+  .recent li { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
 
   .caps { position: relative; width: 100%; min-height: 36px; text-align: center; }
   .cap { position: absolute; inset: 0; font-size: clamp(18px, 1.8vw, 22px); color: #121212; opacity: 0; transform: translateY(6px); transition: opacity .4s, transform .5s var(--ease); }

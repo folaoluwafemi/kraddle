@@ -7,7 +7,7 @@ const follow = [
   { label: 'GitHub', href: '#' },
 ];
 ---
-<footer class="footer stage-inv" data-footer>
+<footer class="footer" data-footer>
   <div class="wrap top">
     <div class="status">
       <p class="readout live"><span class="blink" aria-hidden="true"></span>STATUS · BUILDING</p>
@@ -45,7 +45,7 @@ const follow = [
 </footer>
 
 <style>
-  .footer { padding-top: clamp(72px, 9vw, 120px); overflow: hidden; border-top: 1px solid var(--inv-line); }
+  .footer { --footer-fg: var(--k-ink); --inv-fg: var(--k-ink); --inv-muted: var(--k-graphite); --inv-line: var(--k-line); background: var(--k-paper); color: var(--k-ink); padding-top: clamp(72px, 9vw, 120px); overflow: hidden; border-top: 1px solid var(--k-line); }
   .top { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 48px; align-items: start; }
   @media (max-width: 860px) { .top { grid-template-columns: 1fr; } }
   .status { display: flex; flex-direction: column; gap: 16px; max-width: 42ch; }
@@ -72,8 +72,14 @@ const follow = [
   .gmark { display: inline-flex; margin-right: .18em; }
   .gmark :global(.mark) { height: .72em; width: auto; overflow: visible; }
   .giant:hover .gmark :global(.turnable) { transform: rotate(180deg); }
-  .ch { display: inline-block; transition: font-weight .35s var(--ease), color .35s, transform .5s var(--ease); }
-  .ch.hot { color: var(--k-orange); }
+  .ch {
+    --f: 0;
+    display: inline-block;
+    font-variation-settings: 'wght' calc(800 - var(--f) * 700);
+    font-weight: normal;
+    color: color-mix(in srgb, var(--k-orange) calc(var(--f) * 100%), var(--footer-fg));
+    transform: translateY(calc(var(--f) * -0.04em));
+  }
 
   .bottom { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-block: 22px 32px; border-top: 1px solid var(--inv-line); font-size: 12px; color: var(--inv-muted); }
 </style>
