@@ -1,0 +1,68 @@
+---
+import Mark from './Mark.astro';
+import Rise from './Rise.astro';
+
+const faqs = [
+  {
+    q: 'Does Kraddle replace Claude Code, Cursor or Codex?',
+    a: 'No. It gives the agents you already use the right context, and it also comes as its own agent in Zed and the desktop app.',
+  },
+  {
+    q: 'How is this different from a CLAUDE.md or a rules file?',
+    a: 'A rules file is a note the agent may or may not read, and it goes stale. Kraddle builds its map from the code itself, keeps it current, and hands over only what each step needs.',
+  },
+  {
+    q: 'Do I have to write anything up first?',
+    a: 'No. Point it at your repository. You can add heuristics, the reasons behind how you build, whenever you like.',
+  },
+  {
+    q: 'Does my code leave my machine?',
+    a: 'Kraddle runs locally, next to your code, and keeps its map in your project.',
+  },
+  {
+    q: 'Which languages does it support?',
+    a: 'It starts with TypeScript and JavaScript. More languages follow.',
+  },
+  {
+    q: 'When can I use it?',
+    a: 'Join the waitlist. We’re letting builders in gradually and will email you once, when your spot is ready.',
+  },
+];
+---
+<section class="section faq stage-soft" id="faq">
+  <div class="wrap grid">
+    <div class="side">
+      <p class="label" data-scramble data-reveal>Questions</p>
+      <Rise lines={['Good questions.']} />
+    </div>
+    <div class="list">
+      {faqs.map((f, i) => (
+        <details class="item" data-reveal style={`--d:${i * 0.05}s`}>
+          <summary><span>{f.q}</span><span class="ico" aria-hidden="true"><Mark /></span></summary>
+          <div class="ans"><p>{f.a}</p></div>
+        </details>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .stage-soft { background: var(--k-surface); }
+  .grid { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 48px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .side { display: flex; flex-direction: column; gap: 18px; position: sticky; top: 110px; }
+  .side :global(h2) { font-size: clamp(40px, 5vw, 68px); }
+  .list { border-top: 1px solid var(--k-line); }
+  .item { border-bottom: 1px solid var(--k-line); }
+  summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 24px 4px; font-size: clamp(19px, 1.8vw, 23px); transition: color .2s, padding .4s var(--ease); }
+  summary::-webkit-details-marker { display: none; }
+  summary:hover { padding-left: 12px; }
+  .ico { width: 22px; flex: none; color: var(--k-graphite); transition: color .3s; }
+  .ico :global(.mark) { width: 22px; height: auto; overflow: visible; transition: transform .7s var(--ease-turn); }
+  .item[open] .ico { color: var(--k-orange); }
+  .item[open] .ico :global(.mark) { transform: rotate(180deg); }
+  .ans { overflow: hidden; }
+  .ans p { padding: 0 4px 26px; color: var(--k-graphite); font-size: 18px; max-width: 58ch; }
+  .item[open] .ans p { animation: open .5s var(--ease); }
+  @keyframes open { from { opacity: 0; transform: translateY(-6px); } }
+</style>

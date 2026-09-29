@@ -1,0 +1,97 @@
+@import './tokens.css';
+
+/* Stages: sections alternate grounds so each one reads as its own place.
+   "Inverse" is ink on a light page and paper on a dark page. */
+:root {
+  --inv-bg: #121212; --inv-fg: #EEEEEA; --inv-muted: #8E8E88; --inv-line: #2A2A28; --inv-surface: #1B1B19;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --inv-bg: #EEEEEA; --inv-fg: #121212; --inv-muted: #6B6B66; --inv-line: #D3D3CD; --inv-surface: #F8F8F6; }
+}
+:root[data-theme="dark"] { --inv-bg: #EEEEEA; --inv-fg: #121212; --inv-muted: #6B6B66; --inv-line: #D3D3CD; --inv-surface: #F8F8F6; }
+
+:root {
+  --gutter: clamp(16px, 4vw, 48px);
+  --max: 1200px;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  --ease-turn: cubic-bezier(.7, 0, .2, 1);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; } }
+
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--k-paper);
+  color: var(--k-ink);
+  font-family: var(--k-font-body);
+  font-size: 18px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+img, video, svg, canvas { display: block; max-width: 100%; }
+a { color: inherit; }
+p { margin: 0; }
+h1, h2, h3, h4 { margin: 0; font-family: var(--k-font-header); font-weight: 400; letter-spacing: -.025em; line-height: 1.04; text-wrap: balance; }
+::selection { background: var(--k-orange); color: var(--k-on-orange); }
+:focus-visible { outline: 2px solid var(--k-orange); outline-offset: 3px; }
+
+.wrap { max-width: var(--max); margin-inline: auto; padding-inline: var(--gutter); }
+.label { font-family: var(--k-font-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--k-graphite); }
+.mono { font-family: var(--k-font-mono); }
+.readout { font-family: var(--k-font-readout); font-weight: 800; letter-spacing: .02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- section scaffolding ---------- */
+.section { padding-block: clamp(96px, 13vw, 180px); }
+.stage-inv { background: var(--inv-bg); color: var(--inv-fg); --k-ink: var(--inv-fg); --k-graphite: var(--inv-muted); --k-line: var(--inv-line); --k-surface: var(--inv-surface); --k-paper: var(--inv-bg); }
+.stage-orange { background: var(--k-orange); color: #121212; }
+.head { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 18px; margin-bottom: clamp(48px, 7vw, 96px); }
+.head h2 { font-size: clamp(40px, 6vw, 84px); max-width: 14ch; }
+.head p { font-size: clamp(19px, 1.8vw, 23px); color: var(--k-graphite); max-width: 40ch; }
+
+/* headings that rise line by line */
+.rise > span { display: block; overflow: hidden; padding-bottom: .06em; margin-bottom: -.06em; }
+.rise > span > span { display: block; transition: transform 1s var(--ease); transition-delay: calc(var(--l, 0) * 90ms + var(--d, 0s)); }
+.js .rise:not(.in) > span > span { transform: translateY(105%); }
+.js .rise[data-reveal] { opacity: 1; transform: none; }
+
+/* mono labels that decode like a readout */
+[data-scramble] { font-variant-ligatures: none; }
+
+/* ---------- buttons, links ---------- */
+.btn {
+  --mx: 0px; --my: 0px;
+  font: inherit; font-size: 17px; font-weight: 600; line-height: 1;
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 15px 22px; border: 1px solid var(--k-orange); border-radius: 0;
+  background: var(--k-orange); color: var(--k-on-orange); text-decoration: none; cursor: pointer;
+  transform: translate(var(--mx), var(--my));
+  transition: transform .35s var(--ease), background-color .2s, box-shadow .25s var(--ease);
+}
+.btn:hover { box-shadow: 0 10px 24px -12px color-mix(in srgb, var(--k-orange) 70%, transparent); }
+.btn:active { transform: translate(var(--mx), var(--my)) scale(.98); }
+.btn.ghost { background: transparent; color: var(--k-ink); border-color: var(--k-ink); }
+.btn.ghost:hover { box-shadow: none; background: var(--k-ink); color: var(--k-paper); }
+.btn .arrow { transition: transform .3s var(--ease); }
+.btn:hover .arrow { transform: translateX(4px); }
+
+.link { text-decoration: none; background: linear-gradient(currentColor, currentColor) 0 100% / 0 1px no-repeat; transition: background-size .35s var(--ease); padding-bottom: 2px; }
+.link:hover, .link:focus-visible { background-size: 100% 1px; }
+
+/* ---------- reveal on scroll (only when JS is running) ---------- */
+.js [data-reveal] { opacity: 0; transform: translateY(18px); transition: opacity .8s var(--ease), transform .8s var(--ease); transition-delay: var(--d, 0s); }
+.js [data-reveal].in { opacity: 1; transform: none; }
+
+/* ---------- the turn (mark lands on itself) ---------- */
+.turnable { transition: transform .9s var(--ease-turn); transform-box: fill-box; transform-origin: center; }
+.turning { animation: turn 1.6s var(--ease-turn) infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes turn { 0%, 15% { transform: rotate(0deg); } 85%, 100% { transform: rotate(180deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+  .js [data-reveal] { opacity: 1; transform: none; }
+}

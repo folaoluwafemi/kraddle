@@ -1,0 +1,51 @@
+/* Kraddle brand tokens v1.0 */
+@import url('https://fonts.googleapis.com/css2?family=Young+Serif&family=Afacad:wght@400..700&family=Azeret+Mono:wght@100..900&family=Doto:wght@400..900&display=swap');
+
+:root {
+  --k-paper: #EEEEEA;
+  --k-surface: #F8F8F6;
+  --k-ink: #121212;
+  --k-graphite: #6B6B66;
+  --k-line: #D3D3CD;
+  --k-orange: #FF5A1F;
+  --k-on-orange: #121212;
+  --k-orange-text: #C4420E;
+  --k-orange-tint: #FFE3D8;
+  --k-green: #3C9A5F;
+  --k-green-tint: #DCEADF;
+  --k-font-header: 'Young Serif', Georgia, serif;
+  --k-font-body: 'Afacad', 'Helvetica Neue', Arial, sans-serif;
+  --k-font-mono: 'Azeret Mono', ui-monospace, Consolas, monospace;
+  --k-font-readout: 'Doto', 'Azeret Mono', monospace;
+  --k-mark-stroke: 83.196;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --k-paper: #111110;
+    --k-surface: #1A1A18;
+    --k-ink: #EDEDE9;
+    --k-graphite: #9A9A94;
+    --k-line: #2E2E2B;
+    --k-orange: #FF6A33;
+    --k-on-orange: #111110;
+    --k-orange-text: #FF7A45;
+    --k-orange-tint: #3A1D12;
+    --k-green: #5DBB7F;
+    --k-green-tint: #1B2E22;
+  }
+}
+
+:root[data-theme="dark"] {
+  --k-paper: #111110;
+  --k-surface: #1A1A18;
+  --k-ink: #EDEDE9;
+  --k-graphite: #9A9A94;
+  --k-line: #2E2E2B;
+  --k-orange: #FF6A33;
+  --k-on-orange: #111110;
+  --k-orange-text: #FF7A45;
+  --k-orange-tint: #3A1D12;
+  --k-green: #5DBB7F;
+  --k-green-tint: #1B2E22;
+}

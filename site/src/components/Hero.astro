@@ -1,0 +1,41 @@
+---
+import WaitlistForm from './WaitlistForm.astro';
+import Rise from './Rise.astro';
+---
+<section class="hero" id="waitlist">
+  <canvas class="field" data-dotfield="right" aria-hidden="true"></canvas>
+  <div class="veil" aria-hidden="true"></div>
+  <div class="wrap copy">
+    <p class="label" data-scramble data-reveal>Early access · for builders</p>
+    <Rise as="h1" lines={['The right context.', 'Every agent.', 'Every step.']} accentLast />
+    <p class="sub" data-reveal style="--d:.35s">
+      Agents get too little context or too much, so they break what already worked. Kraddle gives every agent exactly what it needs to know.
+    </p>
+    <div data-reveal style="--d:.5s"><WaitlistForm id="hero" /></div>
+  </div>
+  <p class="hint label" aria-hidden="true"><span class="cursor"></span>Move your cursor · click anywhere</p>
+</section>
+
+<style>
+  .hero {
+    position: relative; overflow: hidden;
+    min-height: clamp(640px, calc(100svh - 68px), 920px);
+    display: flex; align-items: center;
+    padding-block: 56px 88px;
+  }
+  .field { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--k-ink); --field-faint: var(--k-graphite); }
+  .veil { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 58% 70% at 18% 52%, var(--k-paper) 38%, color-mix(in srgb, var(--k-paper) 0%, transparent) 78%); }
+  .copy { position: relative; z-index: 1; width: 100%; display: flex; flex-direction: column; gap: 26px; pointer-events: none; }
+  .copy > * { pointer-events: auto; max-width: 720px; }
+  .hero :global(h1) { font-size: clamp(50px, 7.6vw, 112px); line-height: .96; letter-spacing: -.035em; }
+  .sub { font-size: clamp(21px, 2vw, 27px); line-height: 1.38; color: var(--k-ink); max-width: 34ch !important; }
+  .hint { position: absolute; left: var(--gutter); bottom: 24px; display: flex; align-items: center; gap: 10px; z-index: 1; }
+  .cursor { width: 14px; height: 20px; border: 1.5px solid currentColor; border-radius: 8px; position: relative; }
+  .cursor::after { content: ''; position: absolute; left: 50%; top: 4px; width: 2px; height: 4px; margin-left: -1px; background: currentColor; border-radius: 1px; animation: wheel 1.6s var(--ease) infinite; }
+  @keyframes wheel { 0% { opacity: 0; transform: translateY(-2px); } 40% { opacity: 1; } 100% { opacity: 0; transform: translateY(5px); } }
+  @media (max-width: 900px) {
+    .hero { align-items: flex-end; padding-top: 220px; }
+    .veil { background: linear-gradient(to bottom, transparent 10%, var(--k-paper) 42%); }
+  }
+  @media (hover: none) { .hint { display: none; } }
+</style>

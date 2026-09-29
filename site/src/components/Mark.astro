@@ -1,0 +1,16 @@
+---
+import { PATHS, STROKE, VIEWBOX } from '../lib/mark';
+
+interface Props {
+  class?: string;
+  /** 'turnable' turns half a turn on hover of a parent; 'turning' loops. */
+  motion?: 'none' | 'turnable' | 'turning';
+  title?: string;
+}
+const { class: cls = '', motion = 'none', title } = Astro.props;
+---
+<svg class={`mark ${cls}`} viewBox={VIEWBOX} role={title ? 'img' : undefined} aria-label={title} aria-hidden={title ? undefined : 'true'}>
+  <g class={motion === 'none' ? undefined : motion} fill="none" stroke="currentColor" stroke-width={STROKE}>
+    {PATHS.map((d) => <path d={d} />)}
+  </g>
+</svg>

@@ -1,0 +1,13 @@
+---
+import MediaFrame from './MediaFrame.astro';
+---
+<section class="demo" aria-label="Product recording">
+  <div class="wrap">
+    <MediaFrame kind="video" label="Kraddle mapping a real codebase, then an agent working from it" />
+  </div>
+</section>
+
+<style>
+  .demo { padding-block: 0 clamp(96px, 12vw, 160px); }
+  .demo :global(.frame) { max-width: 1100px; margin-inline: auto; }
+</style>

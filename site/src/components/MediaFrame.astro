@@ -1,0 +1,65 @@
+---
+import { PATHS, STROKE } from '../lib/mark';
+
+interface Props {
+  /** What goes here, shown on the placeholder until a real file exists. */
+  label: string;
+  ratio?: string;
+  kind?: 'video' | 'screenshot';
+  /** Path under /public, e.g. /media/map.mp4. Leave empty for a placeholder. */
+  src?: string;
+  poster?: string;
+  alt?: string;
+  class?: string;
+}
+const { label, ratio = '16 / 9', kind = 'screenshot', src, poster, alt = label, class: cls = '' } = Astro.props;
+// Half B sits top-left, half A bottom-right: the mark's Brackets motif.
+const halfA = [PATHS[0], PATHS[2]];
+const halfB = [PATHS[1], PATHS[3]];
+---
+<figure class={`frame ${cls}`} style={`--ratio:${ratio}`} data-reveal>
+  <div class="screen">
+    {src && kind === 'video' && (
+      <video src={src} poster={poster} autoplay muted loop playsinline preload="metadata" aria-label={alt}></video>
+    )}
+    {src && kind === 'screenshot' && <img src={src} alt={alt} loading="lazy" decoding="async" />}
+    {!src && (
+      <div class="placeholder">
+        {kind === 'video' && <span class="play" aria-hidden="true"><span></span></span>}
+        <span class="kind">{kind === 'video' ? 'Recording' : 'Screenshot'}</span>
+        <span class="what">{label}</span>
+        <span class="ratio">{ratio.replace(/\s/g, '')}</span>
+      </div>
+    )}
+  </div>
+  <svg class="corner tl" viewBox="120 110 380 190" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width={STROKE}>{halfB.map((d) => <path d={d} />)}</g></svg>
+  <svg class="corner br" viewBox="120 320 380 190" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width={STROKE}>{halfA.map((d) => <path d={d} />)}</g></svg>
+</figure>
+
+<style>
+  .frame { position: relative; margin: 0; padding: 18px; }
+  .screen {
+    position: relative; aspect-ratio: var(--ratio); max-width: 100%; overflow: hidden;
+    background: var(--k-surface); border: 1px solid var(--k-line);
+    transition: transform .6s var(--ease), box-shadow .6s var(--ease);
+  }
+  .frame:hover .screen { transform: translateY(-4px); box-shadow: 0 30px 60px -40px color-mix(in srgb, var(--k-ink) 55%, transparent); }
+  video, img { width: 100%; height: 100%; object-fit: cover; }
+  .placeholder {
+    position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 8px; padding: 24px; text-align: center;
+    background-image: radial-gradient(circle, color-mix(in srgb, var(--k-graphite) 35%, transparent) 1.2px, transparent 1.6px);
+    background-size: 18px 18px; background-position: center;
+  }
+  .play { width: 76px; height: 76px; border-radius: 50%; background: var(--k-orange); display: grid; place-items: center; margin-bottom: 10px; position: relative; transition: transform .5s var(--ease); }
+  .play::before { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--k-orange); animation: ping 2.2s var(--ease) infinite; }
+  .play span { width: 0; height: 0; border-left: 18px solid #121212; border-top: 11px solid transparent; border-bottom: 11px solid transparent; margin-left: 5px; }
+  .frame:hover .play { transform: scale(1.1); }
+  @keyframes ping { from { transform: scale(1); opacity: .8; } to { transform: scale(1.7); opacity: 0; } }
+  .kind, .ratio { font-family: var(--k-font-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--k-graphite); background: var(--k-surface); padding: 2px 6px; }
+  .what { font-size: 18px; max-width: 36ch; background: var(--k-surface); padding: 2px 8px; }
+  .corner { position: absolute; width: 44px; height: auto; color: var(--k-ink); transition: transform .6s var(--ease), color .3s; }
+  .tl { top: 0; left: 0; }
+  .br { bottom: 0; right: 0; }
+  .frame:hover .tl { transform: translate(-6px, -6px); color: var(--k-orange); }
+  .frame:hover .br { transform: translate(6px, 6px); color: var(--k-orange); }
+</style>

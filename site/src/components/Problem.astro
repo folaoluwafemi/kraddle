@@ -1,0 +1,60 @@
+---
+const states = [
+  { word: 'Too little.', line: 'It guesses what you never said, and breaks what worked.' },
+  { word: 'Too much.', line: 'It drowns in everything, and forgets halfway through.' },
+  { word: 'Out of date.', line: 'It follows what used to be true.' },
+  { word: 'Exactly enough.', line: 'What this step needs. Nothing more. That’s Kraddle.' },
+];
+---
+<section class="problem stage-inv" id="why" data-morph-section>
+  <div class="pin">
+    <div class="wrap grid">
+      <div class="text">
+        <p class="label" data-scramble>Why agents break what already worked</p>
+        <div class="states">
+          {states.map((s, i) => (
+            <div class={`state${i === 0 ? ' on' : ''}${i === 3 ? ' last' : ''}`} data-state={i}>
+              <h2>{s.word}</h2>
+              <p>{s.line}</p>
+            </div>
+          ))}
+        </div>
+        <ol class="ticks" aria-hidden="true">
+          {states.map((s, i) => <li class={i === 0 ? 'on' : ''} data-tick={i}><span></span>{s.word.replace('.', '')}</li>)}
+        </ol>
+      </div>
+      <div class="viz">
+        <canvas data-morph aria-label="The Kraddle mark in dots, shown with too little, too much, out-of-date and exactly enough context"></canvas>
+      </div>
+    </div>
+    <p class="scroll label" aria-hidden="true">Keep scrolling</p>
+  </div>
+</section>
+
+<style>
+  .problem { height: 420vh; position: relative; }
+  .pin { position: sticky; top: 0; height: 100svh; display: flex; align-items: center; overflow: hidden; }
+  .grid { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; align-items: center; }
+  .text { display: flex; flex-direction: column; gap: 28px; }
+  .states { position: relative; min-height: clamp(220px, 26vw, 320px); }
+  .state { position: absolute; inset: 0 auto auto 0; display: flex; flex-direction: column; gap: 18px; opacity: 0; transform: translateY(24px); transition: opacity .5s var(--ease), transform .7s var(--ease); pointer-events: none; }
+  .state.on { opacity: 1; transform: none; }
+  .state.gone { transform: translateY(-24px); }
+  .state h2 { font-size: clamp(52px, 8vw, 120px); line-height: .95; letter-spacing: -.04em; }
+  .state.last h2 { color: var(--k-orange); }
+  .state p { font-size: clamp(20px, 2vw, 26px); color: var(--inv-muted); max-width: 26ch; }
+  .ticks { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 22px; font-family: var(--k-font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--inv-muted); }
+  .ticks li { display: flex; align-items: center; gap: 8px; transition: color .3s; }
+  .ticks span { width: 8px; height: 8px; border: 1px solid currentColor; transition: background .3s, border-color .3s; }
+  .ticks li.on { color: var(--inv-fg); }
+  .ticks li.on span { background: var(--k-orange); border-color: var(--k-orange); }
+  .viz { aspect-ratio: 1 / 1; width: 100%; max-width: 560px; justify-self: center; }
+  canvas { width: 100%; height: 100%; color: var(--inv-fg); --field-faint: var(--inv-muted); }
+  .scroll { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); color: var(--inv-muted); transition: opacity .4s; }
+  .problem[data-state="3"] .scroll { opacity: 0; }
+  @media (max-width: 860px) {
+    .grid { grid-template-columns: 1fr; gap: 12px; }
+    .viz { order: -1; max-width: 300px; }
+    .states { min-height: 200px; }
+  }
+</style>

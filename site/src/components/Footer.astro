@@ -1,0 +1,79 @@
+---
+import Mark from './Mark.astro';
+const word = 'kraddle'.split('');
+// Social links are placeholders until the accounts exist.
+const follow = [
+  { label: 'X / Twitter', href: '#' },
+  { label: 'GitHub', href: '#' },
+];
+---
+<footer class="footer stage-inv" data-footer>
+  <div class="wrap top">
+    <div class="status">
+      <p class="readout live"><span class="blink" aria-hidden="true"></span>STATUS · BUILDING</p>
+      <p class="muted">Kraddle is made by Almost Impossible, Inc. We build tools that take ideas from your head to finished, with as little in between as possible.</p>
+    </div>
+    <nav class="cols" aria-label="Footer">
+      <div>
+        <p class="label">Product</p>
+        <a class="link" href="#why">Why</a>
+        <a class="link" href="#how">How it works</a>
+        <a class="link" href="#see">In practice</a>
+        <a class="link" href="#faq">Questions</a>
+      </div>
+      <div>
+        <p class="label">Follow</p>
+        {follow.map((f) => <a class="link" href={f.href}>{f.label}</a>)}
+        <a class="link" href="#waitlist">Waitlist</a>
+      </div>
+    </nav>
+    <a class="up" href="#top" data-up aria-label="Back to top">
+      <span class="upmark"><Mark motion="turnable" /></span>
+      <span class="mono">Back to top</span>
+    </a>
+  </div>
+
+  <div class="giant" data-giant aria-label="kraddle" role="img">
+    <span class="gmark" aria-hidden="true"><Mark motion="turnable" /></span>
+    {word.map((c) => <span class="ch" aria-hidden="true">{c}</span>)}
+  </div>
+
+  <div class="wrap bottom">
+    <p class="mono">© 2026 Almost Impossible, Inc.</p>
+    <p class="mono">The right context. Every agent. Every step.</p>
+  </div>
+</footer>
+
+<style>
+  .footer { padding-top: clamp(72px, 9vw, 120px); overflow: hidden; border-top: 1px solid var(--inv-line); }
+  .top { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 48px; align-items: start; }
+  @media (max-width: 860px) { .top { grid-template-columns: 1fr; } }
+  .status { display: flex; flex-direction: column; gap: 16px; max-width: 42ch; }
+  .live { font-size: 22px; display: flex; align-items: center; gap: 12px; color: var(--inv-fg); }
+  .blink { width: 10px; height: 10px; background: var(--k-green); animation: blink 1.6s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+  .muted { color: var(--inv-muted); font-size: 16.5px; }
+  .cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
+  .cols div { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; font-size: 17px; }
+  .cols .label { color: var(--inv-muted); margin-bottom: 4px; }
+  .up { display: inline-flex; flex-direction: column; align-items: center; gap: 12px; text-decoration: none; color: var(--inv-fg); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+  .upmark { width: 64px; height: 64px; display: grid; place-items: center; border: 1px solid var(--inv-line); transition: border-color .3s, background .3s, color .3s; }
+  .upmark :global(.mark) { width: 26px; height: auto; overflow: visible; transform: rotate(-90deg); }
+  .up:hover .upmark { background: var(--k-orange); border-color: var(--k-orange); color: #121212; }
+  .up:hover :global(.turnable) { transform: rotate(180deg); }
+
+  .giant {
+    display: flex; align-items: center; justify-content: center; gap: .02em;
+    font-family: var(--k-font-mono); font-weight: 800; letter-spacing: -.06em; line-height: .9;
+    font-size: clamp(64px, 18.2vw, 300px); color: var(--inv-fg);
+    padding: clamp(48px, 7vw, 96px) var(--gutter) clamp(24px, 3vw, 40px);
+    user-select: none; cursor: default;
+  }
+  .gmark { display: inline-flex; margin-right: .18em; }
+  .gmark :global(.mark) { height: .72em; width: auto; overflow: visible; }
+  .giant:hover .gmark :global(.turnable) { transform: rotate(180deg); }
+  .ch { display: inline-block; transition: font-weight .35s var(--ease), color .35s, transform .5s var(--ease); }
+  .ch.hot { color: var(--k-orange); }
+
+  .bottom { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-block: 22px 32px; border-top: 1px solid var(--inv-line); font-size: 12px; color: var(--inv-muted); }
+</style>

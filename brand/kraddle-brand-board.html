@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kraddle Brand Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Afacad:wght@400..700&family=Azeret+Mono:wght@100..900&family=Doto:wght@400..900&display=swap">
+<style>
+:root{
+  --bg:#EEEEEA; --surface:#F8F8F6; --ink:#121212; --muted:#6B6B66; --line:#D3D3CD; --line2:#BDBDB6;
+  --orange:#FF5A1F; --on-orange:#121212; --orange-text:#C4420E; --orange-tint:#FFE3D8;
+  --green:#3C9A5F; --green-tint:#DCEADF;
+  --deep:#121212; --deep-fg:#EEEEEA; --deep-muted:#8E8E88; --deep-line:#2A2A28; --deep-green:#5DBB7F; --deep-orange:#FF6A33;
+  --serif:"Young Serif",Georgia,"Times New Roman",serif;
+  --sans:"Afacad","Helvetica Neue",Arial,sans-serif;
+  --mono:"Azeret Mono",ui-monospace,SFMono-Regular,Consolas,monospace;
+  --dots:"Doto","Azeret Mono",monospace;
+  --mw:83.196px; --wmw:800;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#111110; --surface:#1A1A18; --ink:#EDEDE9; --muted:#9A9A94; --line:#2E2E2B; --line2:#45453F;
+    --orange:#FF6A33; --on-orange:#111110; --orange-text:#FF7A45; --orange-tint:#3A1D12;
+    --green:#5DBB7F; --green-tint:#1B2E22; --deep-line:#34342F; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111110; --surface:#1A1A18; --ink:#EDEDE9; --muted:#9A9A94; --line:#2E2E2B; --line2:#45453F;
+  --orange:#FF6A33; --on-orange:#111110; --orange-text:#FF7A45; --orange-tint:#3A1D12;
+  --green:#5DBB7F; --green-tint:#1B2E22; --deep-line:#34342F; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.55;padding-inline:clamp(16px,4vw,48px);padding-block:0 72px}
+.wrap{max-width:1180px;margin-inline:auto}
+p{margin:0}
+h1,h2,h3{margin:0;font-family:var(--serif);font-weight:400;letter-spacing:-.025em;line-height:1.05;text-wrap:balance}
+.lbl{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.mk{display:block;overflow:visible}
+.mk g{stroke-width:var(--mw)}
+
+.lock{display:inline-flex;align-items:center;gap:.32em;line-height:1;color:var(--ink)}
+.lock .mk{height:.82em;width:auto;flex:none}
+.wm-mono{font-family:var(--mono);font-weight:var(--wmw);letter-spacing:-.06em}
+.wm-serif{font-family:var(--serif);font-weight:400;letter-spacing:-.04em}
+.wm-page{font-family:var(--mono);font-weight:var(--wmw);letter-spacing:-.06em}
+:root[data-lock="B"] .wm-page{font-family:var(--serif);font-weight:400;letter-spacing:-.04em}
+.detail{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);background:var(--surface)}
+.detail .d1,.detail .d2{aspect-ratio:1/1;max-width:100%;display:grid;place-items:center;overflow:hidden;color:var(--ink)}
+.detail .d1 svg{width:100%;height:100%;display:block}
+.detail .d2{font-family:var(--serif);font-size:clamp(150px,24vw,320px);line-height:1;border-left:1px solid var(--line)}
+.detail .dcap{grid-column:1/-1;border-top:1px solid var(--line);padding:12px 16px;font-size:14.5px;color:var(--muted)}
+.rules{margin:0;padding:24px 24px 24px 40px;display:flex;flex-direction:column;gap:10px;font-size:15.5px;color:var(--ink)}
+.rules li::marker{color:var(--orange)}
+
+.bar{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding-block:24px}
+.bar .lock{font-size:24px}
+.intro{padding-block:28px 44px;display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:end}
+.intro h1{font-size:clamp(38px,5.6vw,72px)}
+.intro ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;font-size:15.5px;color:var(--muted)}
+.intro li{display:grid;grid-template-columns:92px 1fr;gap:10px}
+.intro li b{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);font-weight:500;padding-top:4px}
+@media (max-width:820px){.intro{grid-template-columns:1fr}}
+
+.part{border-top:1px solid var(--line);padding-block:52px;display:grid;grid-template-columns:190px 1fr;gap:32px}
+.part>.lbl{padding-top:8px}
+.part .body{display:flex;flex-direction:column;gap:18px;min-width:0}
+.part h2{font-size:clamp(28px,3.4vw,42px)}
+.part .body>p{max-width:64ch;color:var(--muted)}
+@media (max-width:760px){.part{grid-template-columns:1fr;gap:16px;padding-block:38px}}
+
+.ctl{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);background:var(--surface)}
+.seg button{all:unset;cursor:pointer;padding:8px 13px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.seg button:focus-visible{outline:2px solid var(--orange);outline-offset:-2px}
+
+.marks{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.mtile{border:1px solid var(--line);min-height:300px;display:grid;place-items:center;padding:36px}
+.mtile .mk{width:min(190px,60%);height:auto}
+.mtile.paper{background:var(--surface);color:var(--ink)}
+.mtile.deep{background:var(--deep);color:var(--deep-fg);border-color:var(--deep)}
+@media (max-width:620px){.marks{grid-template-columns:1fr}.mtile{min-height:220px}}
+
+.locks{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.lt{border:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column}
+.lt .show{padding:40px 24px;display:flex;flex-direction:column;gap:28px;align-items:flex-start}
+.lt .big{font-size:clamp(44px,6vw,72px)}
+.lt .small{font-size:20px}
+.lt .deeprow{background:var(--deep);padding:22px 24px;display:flex;gap:28px;align-items:center;flex-wrap:wrap}
+.lt .deeprow .lock{color:var(--deep-fg);font-size:28px}
+.lt .cap{border-top:1px solid var(--line);padding:12px 16px;font-size:14.5px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.lt .cap b{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);font-weight:500}
+.tag{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;background:var(--orange);color:var(--on-orange);padding:3px 7px;margin-left:6px;vertical-align:1px}
+@media (max-width:760px){.locks{grid-template-columns:1fr}}
+
+.colors{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr .8fr;gap:10px}
+.colors>div{border:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column}
+.colors i{display:block;height:110px}
+.colors span{padding:10px 12px;font-size:14px;line-height:1.35;display:flex;flex-direction:column;gap:2px;color:var(--muted)}
+.colors b{font-size:15px;color:var(--ink);font-weight:600}
+.colors code{font-family:var(--mono);font-size:11px}
+@media (max-width:860px){.colors{grid-template-columns:1fr 1fr}.colors>div:first-child{grid-column:1/-1}}
+.ratio{display:flex;height:26px;border:1px solid var(--line)}
+.ratio div{height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+
+.faces{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media (max-width:900px){.faces{grid-template-columns:1fr}}
+.face{border:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column}
+.face .role{display:flex;justify-content:space-between;gap:8px;padding:11px 16px;border-bottom:1px solid var(--line)}
+.face .role b{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:500}
+.face .aa{padding:16px 16px 6px;font-size:112px;line-height:1}
+.face .fam{padding:0 16px;font-size:22px}
+.face .gl{padding:10px 16px 16px;font-size:15px;line-height:1.5;color:var(--muted);word-break:break-word}
+.scale{border:1px solid var(--line);background:var(--surface)}
+.scale .row{display:grid;grid-template-columns:150px 1fr;gap:16px;align-items:baseline;padding:14px 18px;border-top:1px solid var(--line)}
+.scale .row:first-child{border-top:0}
+.scale .row>span:first-child{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.06em}
+@media (max-width:620px){.scale .row{grid-template-columns:1fr;gap:6px}}
+
+.mgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+@media (max-width:760px){.mgrid{grid-template-columns:1fr}}
+.mt{border:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column}
+.mt .art{aspect-ratio:16/9;color:var(--ink);display:grid;place-items:center;overflow:hidden;max-width:100%}
+.mt .art>svg{width:100%;height:100%;display:block}
+.mt .cap{border-top:1px solid var(--line);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:14px;font-size:14.5px;line-height:1.45;color:var(--muted)}
+.mt .cap b{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);font-weight:500;margin-bottom:4px}
+@media (max-width:520px){.mt .cap{grid-template-columns:1fr}}
+.turn{transform-box:fill-box;transform-origin:center;animation:turn 3.2s cubic-bezier(.7,0,.2,1) infinite}
+@keyframes turn{0%,40%{transform:rotate(0deg)}70%,100%{transform:rotate(180deg)}}
+@media (prefers-reduced-motion:reduce){.turn{animation:none}}
+.readout{font-family:var(--dots);font-weight:800;line-height:1;letter-spacing:.02em}
+
+.hero{border:1px solid var(--line);background:var(--bg);position:relative;overflow:hidden}
+.hero nav{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.hero nav .lock{font-size:22px}
+.hero nav .links{display:flex;gap:20px;font-size:15px;color:var(--muted)}
+.hero .bgmark{position:absolute;right:-4%;top:60px;width:min(46%,480px);color:var(--line2);pointer-events:none}
+.hero .bgmark svg{width:100%;height:auto;display:block}
+.hero .hb{position:relative;z-index:1;padding:clamp(32px,7vw,88px) clamp(20px,5vw,56px) clamp(32px,6vw,64px);display:flex;flex-direction:column;gap:22px}
+.hero h3{font-size:clamp(38px,5.8vw,74px);max-width:13ch}
+.hero h3 span{color:var(--muted)}
+.hero .sub{font-size:19px;line-height:1.55;color:var(--muted);max-width:50ch}
+form{display:flex;gap:8px;flex-wrap:wrap}
+input{font:inherit;font-size:16px;padding:12px 16px;border:1px solid var(--line);background:var(--surface);color:var(--ink);flex:1 1 220px;max-width:320px;min-width:0;border-radius:0}
+input::placeholder{color:var(--muted)}
+.btn{font:inherit;font-size:16px;font-weight:600;padding:12px 20px;border:1px solid var(--orange);background:var(--orange);color:var(--on-orange);cursor:pointer;border-radius:0;display:inline-flex;align-items:center;gap:10px}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn .mk{height:16px;width:auto}
+.btn:focus-visible,input:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.okay{font-family:var(--mono);font-size:12.5px;color:var(--green)}
+
+.apps2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:860px){.apps2{grid-template-columns:1fr}}
+.term{background:var(--deep);color:var(--deep-fg);font-family:var(--mono);font-size:12.5px;line-height:1.85;padding:18px 20px;overflow-x:auto;border:1px solid var(--deep-line)}
+.term .row{white-space:pre}
+.term .d{color:var(--deep-muted)}
+.term .h{color:var(--deep-green)}
+.term .s{color:var(--deep-orange);font-weight:600}
+.term .th{display:flex;justify-content:space-between;color:var(--deep-muted);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px}
+.og{aspect-ratio:1200/630;max-width:100%;background:var(--deep);color:var(--deep-fg);border:1px solid var(--deep-line);padding:clamp(18px,3.4vw,36px);display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+.og .lock{color:var(--deep-fg);font-size:clamp(16px,2vw,22px)}
+.og h4{margin:0;font-family:var(--serif);font-weight:400;font-size:clamp(22px,3.2vw,38px);line-height:1.05;letter-spacing:-.025em;max-width:13ch;position:relative}
+.og .om{position:absolute;right:5%;top:12%;width:34%;color:var(--deep-orange)}
+.og .om svg{width:100%;height:auto;display:block}
+.og .t{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--deep-muted);position:relative}
+.comps{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:20px;border:1px solid var(--line);background:var(--surface)}
+.chip{font-family:var(--mono);font-size:12px;padding:6px 10px;display:inline-flex;align-items:center;gap:8px}
+.chip::before{content:"";width:7px;height:7px;background:currentColor}
+.chip.h{background:var(--green-tint);color:var(--green)}
+.chip.s{background:var(--orange-tint);color:var(--orange-text)}
+.chip.a{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.vdiv{width:1px;align-self:stretch;background:var(--line)}
+.band{border:1px solid var(--line);background:var(--surface);color:var(--ink);overflow:hidden;height:120px}
+.band svg{display:block;width:100%;height:100%}
+.quote{border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.quote svg{display:block;width:100%;height:auto}
+
+footer{border-top:1px solid var(--line);margin-top:56px;padding-top:22px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}
+footer .lock{font-size:18px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="bar">
+    <span class="lock wm-page" data-mk>kraddle</span>
+    <span class="lbl">Brand identity · v1.0 · September 2026</span>
+  </div>
+
+  <div class="intro">
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <span class="lbl">An Almost Impossible company</span>
+      <h1>Build what's in your head. Kraddle holds the rest.</h1>
+    </div>
+    <ul>
+      <li><b>Mark</b><span>The original square-ended mark, with the name in Azeret Mono.</span></li>
+      <li><b>Type</b><span>Young Serif for headers, Afacad for text, Azeret Mono for Kraddle's voice.</span></li>
+      <li><b>Color</b><span>Orange leads. Green is a small accent for things that held.</span></li>
+      <li><b>Motifs</b><span>Only the ones you liked, plus close relatives. Lines are thinner everywhere.</span></li>
+    </ul>
+  </div>
+
+  <div class="part" id="mark">
+    <span class="lbl">Mark</span>
+    <div class="body">
+      <h2>Square ends. Solid and reliable.</h2>
+      <p>The mark is your designer's original: two identical halves, each turned half a turn onto the other, with square ends. The name is set in lowercase Azeret Mono at weight 800, one step lighter than the mark so the two read as the same weight.</p>
+      <div class="marks">
+        <div class="mtile paper" data-mk></div>
+        <div class="mtile deep" data-mk></div>
+      </div>
+      <div class="locks">
+        <div class="lt">
+          <div class="show">
+            <span class="lock wm-page big" data-mk>kraddle</span>
+            <span class="lock wm-page small" data-mk>kraddle</span>
+          </div>
+          <div class="deeprow"><span class="lock wm-page" data-mk>kraddle</span></div>
+          <div class="cap"><b>Lockup</b>Mark height is 0.82 × the name's font size. The gap between them is 0.32 × the font size.</div>
+        </div>
+        <div class="lt">
+          <ul class="rules">
+            <li>Ink on paper, or paper on ink. The logo itself is never orange or green.</li>
+            <li>Keep clear space of at least half the mark's width on every side.</li>
+            <li>Smallest size: the mark 16px tall on screens. Below that, use the mark without the name.</li>
+            <li>Never round the ends, stretch, outline, or add shadows or gradients.</li>
+            <li>The name is always lowercase: kraddle.</li>
+            <li>The mark alone works as the app icon, favicon and avatar.</li>
+          </ul>
+          <div class="cap"><b>Rules</b>Motifs may use orange; the logo may not.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="part" id="color">
+    <span class="lbl">Color</span>
+    <div class="body">
+      <h2>Orange leads. Green is the quiet accent.</h2>
+      <div class="colors">
+        <div><i style="background:#FF5A1F"></i><span><b>Kraddle orange</b><code>#FF5A1F</code>Main color. Buttons, highlights, the moments that matter, and when Kraddle steps in.</span></div>
+        <div><i style="background:#121212"></i><span><b>Ink</b><code>#121212</code>Mark, headlines, dark surfaces.</span></div>
+        <div><i style="background:#EEEEEA;box-shadow:inset 0 -1px 0 #D3D3CD"></i><span><b>Paper</b><code>#EEEEEA</code>Ground.</span></div>
+        <div><i style="background:#6B6B66"></i><span><b>Graphite</b><code>#6B6B66</code>Secondary text, faint marks.</span></div>
+        <div><i style="background:#3C9A5F"></i><span><b>Held green</b><code>#3C9A5F</code>Small accent. Only for "this held".</span></div>
+      </div>
+      <div class="ratio" aria-label="How much of each color a typical page uses">
+        <div style="flex:64;background:var(--bg)"></div><div style="flex:9;background:var(--surface)"></div><div style="flex:16;background:#121212"></div><div style="flex:4;background:#6B6B66"></div><div style="flex:6;background:#FF5A1F"></div><div style="flex:1;background:#3C9A5F"></div>
+      </div>
+      <div class="legend"><span>Paper 64</span><span>Surface 9</span><span>Ink 16</span><span>Graphite 4</span><span>Orange 6</span><span>Green 1</span></div>
+    </div>
+  </div>
+
+  <div class="part" id="type">
+    <span class="lbl">Type</span>
+    <div class="body">
+      <h2>A warm serif, a friendly sans, a careful mono.</h2>
+      <div class="faces">
+        <div class="face"><div class="role"><b>Header</b><span class="lbl">Google Fonts</span></div><div class="aa" style="font-family:var(--serif)">Aa</div><div class="fam" style="font-family:var(--serif)">Young Serif</div><div class="gl" style="font-family:var(--serif);color:var(--ink)">ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789</div><div class="gl">One weight, used for every headline.</div></div>
+        <div class="face"><div class="role"><b>Body</b><span class="lbl">Google Fonts</span></div><div class="aa">Aa</div><div class="fam">Afacad</div><div class="gl" style="color:var(--ink)">Kraddle knows how your project is meant to work: the patterns it follows and the parts that can't break.</div><div class="gl"><span style="font-weight:400">400</span> · <span style="font-weight:500">500</span> · <span style="font-weight:600">600</span> · <span style="font-weight:700">700</span></div></div>
+        <div class="face"><div class="role"><b>Mono</b><span class="lbl">Google Fonts</span></div><div class="aa" style="font-family:var(--mono);font-size:96px">Aa</div><div class="fam" style="font-family:var(--mono);font-size:19px">Azeret Mono</div><div class="gl" style="font-family:var(--mono);font-size:13.5px;color:var(--ink)">held · prices stay on the server<br>stop&nbsp; · src/ui/Checkout.tsx<br>0O 1lI {} [] =&gt; != -&gt;</div><div class="gl">Also sets the name, from 400 to 900.</div></div>
+      </div>
+      <div class="scale">
+        <div class="row"><span>DISPLAY · 72</span><span style="font-family:var(--serif);font-size:clamp(34px,5.4vw,72px);line-height:1;letter-spacing:-.03em">It broke what you didn't say.</span></div>
+        <div class="row"><span>H1 · 44</span><span style="font-family:var(--serif);font-size:clamp(28px,3.4vw,44px);line-height:1.05;letter-spacing:-.025em">Build what's in your head.</span></div>
+        <div class="row"><span>H2 · 28</span><span style="font-family:var(--serif);font-size:28px;letter-spacing:-.02em">How Kraddle knows</span></div>
+        <div class="row"><span>BODY · 18 / 1.55</span><span style="font-size:18px">It reads the code and its history, picks up what you say while building, and asks when something isn't clear.</span></div>
+        <div class="row"><span>MONO · 13</span><span style="font-family:var(--mono);font-size:13px">held · checkout keeps its step order</span></div>
+        <div class="row"><span>READOUT · DOTO</span><span class="readout" style="font-size:30px;color:var(--orange-text)">03 HELD</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="part" id="motifs">
+    <span class="lbl">Motifs</span>
+    <div class="body">
+      <h2>Drawn from the mark, used lightly.</h2>
+      <p>Only the ones you liked, plus two close relatives. Each card says what the motif means and where it goes on a page, so none of them are decoration without a job.</p>
+      <div class="mgrid" id="mgrid"></div>
+    </div>
+  </div>
+
+  <div class="part" id="use">
+    <span class="lbl">In use</span>
+    <div class="body">
+      <h2>On a real page, the motifs stay in the background.</h2>
+      <div class="hero">
+        <div class="bgmark" data-dotmark data-r="7" data-step="26"></div>
+        <nav><span class="lock wm-page" data-mk>kraddle</span><span class="links"><span>How it works</span><span>Cloud</span><span>Waitlist</span></span></nav>
+        <div class="hb">
+          <span class="lbl">Early access</span>
+          <h3>It did what you asked. <span>It broke what you didn't say.</span></h3>
+          <p class="sub">Kraddle knows how your project is meant to work: the patterns it follows, the approaches already ruled out, the parts that can't break. Every change an agent makes stays inside them.</p>
+          <form id="wl"><label for="wl-email" class="lbl" style="position:absolute;left:-9999px">Email</label><input id="wl-email" type="email" placeholder="you@studio.dev" required><button class="btn" type="submit">Join the waitlist</button></form>
+          <span class="okay" id="wl-ok" hidden>held · you're on the list (preview only, nothing was sent)</span>
+        </div>
+      </div>
+      <div class="quote" id="quote"></div>
+      <div class="apps2">
+        <div class="term" role="img" aria-label="Example agent session where Kraddle stops a change">
+          <div class="th"><span>agent session</span><span>kraddle</span></div>
+          <div class="row"><span class="d">you   </span>add a discount code field to checkout</div>
+          <div class="row"><span class="d">agent </span>editing src/ui/Checkout.tsx</div>
+          <div class="row"><span class="h">held  </span><span class="d">checkout keeps its step order</span></div>
+          <div class="row"><span class="s">stop  </span>The total is now calculated in the browser.</div>
+          <div class="row"><span class="d">      </span>Prices are only calculated on the server here.</div>
+          <div class="row"><span class="d">      seen in api/pricing.ts · change not written</span></div>
+          <div class="row"><span class="d">agent </span>moving the discount into api/pricing.ts</div>
+          <div class="row"><span class="h">held  </span>all good · 3 files changed</div>
+        </div>
+        <div class="og" role="img" aria-label="Social share card">
+          <span class="lock wm-page" data-mk>kraddle</span>
+          <div class="om" data-dotmark data-r="9" data-step="24"></div>
+          <div style="display:flex;flex-direction:column;gap:10px"><h4>Build what's in your head. Kraddle holds the rest.</h4><span class="t">Share card · 1200 × 630</span></div>
+        </div>
+      </div>
+      <div class="comps">
+        <button class="btn" type="button">Join the waitlist</button>
+        <button class="btn" type="button" aria-label="Joining, loading"><span data-mk data-turn></span>Joining</button>
+        <button class="btn ghost" type="button">How it works</button>
+        <span class="vdiv"></span>
+        <span class="chip s">stopped</span>
+        <span class="chip h">held</span>
+        <span class="chip a">asking</span>
+      </div>
+      <div class="band" id="band"></div>
+    </div>
+  </div>
+
+  <footer>
+    <span class="lock wm-page" data-mk>kraddle</span>
+    <span class="lbl">Almost Impossible, Inc. · all fonts free on Google Fonts</span>
+  </footer>
+</div>
+
+<script>
+(function(){
+  const root=document.documentElement;
+  const P=[
+    'M376.049 368.843H488.002','M243.953 253.021H132',
+    'M132 368.843H202.824C221.792 368.843 239.783 377.257 251.943 391.815L293.051 441.029C305.211 455.586 323.202 464 342.17 464H376.051',
+    'M488.002 253.021H417.18C398.212 253.021 380.221 244.607 368.061 230.049L326.953 180.835C314.793 166.278 296.802 157.864 277.834 157.864H243.953'
+  ];
+  const MW=83.196, WW=800, ENDS_B='curved', PAGE='A'; let UID=0;
+  const r=n=>Math.round(n*100)/100;
+  const paths=list=>list.map(d=>`<path d="${d}"/>`).join('');
+  const pageEnds=()=>PAGE==='A'?'square':ENDS_B;
+  const ROT='rotate(180 310 310.9325)'; // the mark's centre: each half turns onto the other
+
+  /* ---- mark geometry: square ends, or ends cut sharp-and-curved like Young Serif ---- */
+  function cut(x0,y,dir,h,a,c){return {T:[x0+a,y-h],Q:[x0+dir*2*c,y],B:[x0-a,y+h]};}
+  function clipD(L,R){
+    const p=v=>`${r(v[0])} ${r(v[1])}`;
+    return `M${r(L.T[0])} -3000L${p(L.T)}Q${p(L.Q)} ${p(L.B)}L${r(L.B[0])} 4000L${r(R.B[0])} 4000L${p(R.B)}Q${p(R.Q)} ${p(R.T)}L${r(R.T[0])} -3000Z`;
+  }
+  function halfA(w,ends){
+    if(ends==='square') return `<path d="${P[0]}"/><path d="${P[2]}"/>`;
+    const h=w/2, a=.5*h, c=(ends==='curved'?1:-1)*.45*h, y1=368.843, y2=464;
+    const i1='kc'+(++UID), i2='kc'+(++UID);
+    const p1=`M${r(376.049-a-2)} ${y1}H${r(488.002+a+2)}`;
+    const p3=`M${r(132-a-2)} 368.843H202.824C221.792 368.843 239.783 377.257 251.943 391.815L293.051 441.029C305.211 455.586 323.202 464 342.17 464H${r(376.051+a+2)}`;
+    const c1=clipD(cut(376.049,y1,-1,h,a,c),cut(488.002,y1,1,h,a,c));
+    const c3=clipD(cut(132,y1,-1,h,a,c),cut(376.051,y2,1,h,a,c));
+    return `<clipPath id="${i1}" clipPathUnits="userSpaceOnUse"><path d="${c1}"/></clipPath><clipPath id="${i2}" clipPathUnits="userSpaceOnUse"><path d="${c3}"/></clipPath><path d="${p1}" clip-path="url(#${i1})"/><path d="${p3}" clip-path="url(#${i2})"/>`;
+  }
+  const halfB=(w,e)=>e==='square'?`<path d="${P[1]}"/><path d="${P[3]}"/>`:`<g transform="${ROT}">${halfA(w,e)}</g>`;
+  const markInner=(w,e)=>e==='square'?paths(P):halfA(w,e)+halfB(w,e);
+  const vb=(w,e)=>{const a=e==='square'?0:.25*w;return `${r(132-a-1)} ${r(157.864-w/2-1)} ${r(356+2*a+2)} ${r(464-157.864+w+2)}`;};
+  const mkSvg=(e,cls='')=>`<svg class="mk" viewBox="${vb(MW,e)}" aria-hidden="true"><g class="${cls}" fill="none" stroke="currentColor">${markInner(MW,e)}</g></svg>`;
+  const markG=(tf,cls='',style='')=>`<g ${tf?`transform="${tf}"`:''} class="${cls}" fill="none" stroke="currentColor" style="stroke-width:var(--mw);${style}">${markInner(MW,pageEnds())}</g>`;
+
+  /* ---- the joint, from the mark's own curve ---- */
+  function J(s,k){return `c${r(18.968*s)} 0 ${r(36.959*s)} ${r(8.414*s*k)} ${r(49.119*s)} ${r(22.972*s*k)}l${r(41.108*s)} ${r(49.214*s*k)}c${r(12.16*s)} ${r(14.557*s*k)} ${r(30.151*s)} ${r(22.971*s*k)} ${r(49.119*s)} ${r(22.971*s*k)}`;}
+  const DY=95.157;
+  const svg=(w,h,inner,extra='')=>`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet" aria-hidden="true" ${extra}>${inner}</svg>`;
+
+  /* ---- motifs ---- */
+  function mTurn(){return svg(640,360,`<g transform="translate(320 180) scale(.5) translate(-310 -311)">${markG('','turn')}</g>`);}
+  function mTurnStrip(){
+    let g='';
+    [0,45,90,135,180].forEach((a,i)=>{g+=`<g transform="translate(${100+i*110} 180) rotate(${a}) scale(.19) translate(-310 -311)" opacity="${i===4?1:r(.18+i*.14)}">${markG('')}</g>`;});
+    g+=`<rect x="${100+4*110-6}" y="258" width="12" height="12" style="fill:var(--orange)"/>`;
+    return svg(640,360,g);
+  }
+  function mDotsJoint(){
+    const s=1.25, sw=DY*s*.874;
+    return svg(1000,560,`<path data-shape d="M${r(-sw)} 190H330${J(s,1)}H${r(1000+sw)}" fill="none" stroke="none" stroke-width="${r(sw)}"/><g data-dots></g>`,'data-dotsvg data-step="24" data-r="7.5" data-acc="870"');
+  }
+  function dotMarkSvg(step,rad,acc){
+    return `<svg viewBox="112 96 396 430" aria-hidden="true" data-dotsvg data-step="${step}" data-r="${rad}" ${acc?`data-acc="${acc}"`:''}><g fill="none" stroke="none" stroke-width="83.196">${P.map(d=>`<path data-shape d="${d}"/>`).join('')}</g><g data-dots></g></svg>`;
+  }
+  function mDotMark(){return `<div style="width:42%;color:var(--ink)">${dotMarkSvg(20,7,440)}</div>`;}
+  function mBrackets(t1,t2,h){
+    const k=.36, H=h||420, e=pageEnds();
+    const ts='font-family:var(--serif);letter-spacing:-.02em;';
+    return svg(1000,H,`<g fill="none" stroke="currentColor" style="stroke-width:var(--mw)" transform="translate(${r(70-132*k)} ${r(56-116*k)}) scale(${k})">${halfB(MW,e)}</g>
+      <g fill="none" stroke="currentColor" style="stroke-width:var(--mw)" transform="translate(${r(930-488*k)} ${r(H-56-506*k)}) scale(${k})">${halfA(MW,e)}</g>
+      <text x="500" y="${H/2-8}" text-anchor="middle" font-size="46" style="${ts}fill:currentColor">${t1}</text>
+      <text x="500" y="${H/2+50}" text-anchor="middle" font-size="46" style="${ts}fill:var(--orange-text)">${t2}</text>`);
+  }
+  function mTwins(){
+    let g='';
+    for(let j=0;j<3;j++)for(let i=0;i<7;i++){
+      const cx=80+i*120, cy=70+j*120, rot=((i+j)%2)*90, hot=(i===4&&j===1);
+      g+=`<g transform="translate(${cx} ${cy}) rotate(${rot}) scale(.19) translate(-310 -311)">${markG('','',hot?'stroke:var(--orange)':'')}</g>`;
+    }
+    return svg(880,380,g);
+  }
+  function mNest(){
+    const s=.9, dx=139.346*s, dy=DY*s; let g='';
+    for(let i=0;i<6;i++){
+      const y=70+i*28, w=330-i*36, x1=500-w/2-dx;
+      g+=`<path d="M40 ${y}H${r(x1)}${J(s,1)}H${r(x1+dx+w)}${J(s,-1)}H960" fill="none" stroke="currentColor" stroke-width="2.5" opacity="${r(.35+i*.13)}"/>`;
+    }
+    g+=`<circle cx="500" cy="${r(70+5*28+dy-17)}" r="13" style="fill:var(--orange)"/>`;
+    return svg(1000,440,g);
+  }
+  function mReadout(){
+    return `<div style="display:flex;flex-direction:column;gap:10px;align-items:flex-start;padding:24px">
+      <span class="readout" style="font-size:clamp(34px,6vw,64px);color:var(--ink)">12 HELD</span>
+      <span class="readout" style="font-size:clamp(34px,6vw,64px);color:var(--orange-text)">01 STOP</span>
+      <span class="readout" style="font-size:clamp(20px,3vw,30px);color:var(--muted)">SESSION 0042</span></div>`;
+  }
+  const LIB=[
+    ['Turn',mTurn,'The mark turns half a turn and lands exactly on itself, because its two halves are the same shape.','Loading and waiting states: buttons, app start-up, anywhere Kraddle is thinking.'],
+    ['Turn, step by step',mTurnStrip,'The same turn frozen in five frames. Progress that ends where it started: stable.','Onboarding steps, a "how it works" sequence, section dividers.'],
+    ['Dots',mDotsJoint,"The mark's joint drawn as a dot-matrix readout. The orange dots are where the line arrives.",'Status screens, small badges, empty states, anything that feels like a display.'],
+    ['Dot mark',mDotMark,'The whole mark in dots. The orange dots are the part being held.','Faint hero backgrounds, the share card, stickers and merch.'],
+    ['Brackets',()=>mBrackets("Everything you didn't say","still holds."),'The two halves pulled apart to hold a line between them.','Pull quotes, the one sentence you want people to remember, testimonials later.'],
+    ['Twins',mTwins,'The mark repeated, alternately turned. One is orange: the one Kraddle is paying attention to.','Footer bands, packaging, slide backgrounds, conference swag.'],
+    ['Nest',mNest,'Layers holding layers, with the thing that matters at the centre.','"How it works": the code, your intentions, and the work sitting inside them.'],
+    ['Readout',mReadout,'Numbers and status in a dot-matrix face (Doto), like a display on hardware.',"Session counters, the desktop app's status bar, launch-day numbers."]
+  ];
+
+  function dotify(scope){
+    scope.querySelectorAll('svg[data-dotsvg]').forEach(sv=>{
+      const shapes=[...sv.querySelectorAll('[data-shape]')], g=sv.querySelector('[data-dots]');
+      if(!g||!shapes.length||!shapes[0].isPointInStroke) return;
+      const step=+sv.dataset.step, rad=+sv.dataset.r, acc=sv.dataset.acc?+sv.dataset.acc:Infinity;
+      const b=sv.viewBox.baseVal;
+      shapes.forEach(p=>p.setAttribute('stroke','#000'));
+      let out='';
+      for(let y=b.y+step/2;y<b.y+b.height;y+=step)for(let x=b.x+step/2;x<b.x+b.width;x+=step){
+        let inS=false; try{inS=shapes.some(p=>p.isPointInStroke(new DOMPoint(x,y)));}catch(_){}
+        if(inS) out+=`<circle cx="${r(x)}" cy="${r(y)}" r="${rad}" style="fill:${x>acc?'var(--orange)':'currentColor'}"/>`;
+        else out+=`<circle cx="${r(x)}" cy="${r(y)}" r="${r(rad*.2)}" style="fill:currentColor" opacity=".22"/>`;
+      }
+      shapes.forEach(p=>p.setAttribute('stroke','none'));
+      g.innerHTML=out;
+    });
+  }
+
+  /* ---- render everything that depends on stroke, ends or page option ---- */
+  function render(){
+    UID=0;
+    root.style.setProperty('--mw',MW+'px'); root.style.setProperty('--wmw',WW);
+    root.setAttribute('data-lock',PAGE);
+    document.querySelectorAll('[data-mk]').forEach(el=>{
+      const old=el.querySelector(':scope > svg.mk'); if(old) old.remove();
+      const e=el.dataset.ends==='square'?'square':el.dataset.ends==='b'?ENDS_B:pageEnds();
+      el.insertAdjacentHTML('afterbegin', mkSvg(e, el.hasAttribute('data-turn')?'turn':''));
+    });
+    const mg=document.getElementById('mgrid');
+    mg.innerHTML=LIB.map(([n,fn,means,where])=>`<div class="mt"><div class="art">${fn()}</div><div class="cap"><div><b>${n}</b>${means}</div><div><b>Where it goes</b>${where}</div></div></div>`).join('');
+    dotify(mg);
+    document.getElementById('quote').innerHTML=mBrackets("You shouldn't have to watch over it.","You should feel it holding.",360);
+    let g='';for(let i=0;i<14;i++){const rot=(i%2)*90;g+=`<g transform="translate(${60+i*110} 60) rotate(${rot}) scale(.16) translate(-310 -311)" opacity="${i===6?1:.22}">${markG('','',i===6?'stroke:var(--orange)':'')}</g>`;}
+    document.getElementById('band').innerHTML=`<svg viewBox="0 0 1540 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${g}</svg>`;
+  }
+
+  document.querySelectorAll('[data-dotmark]').forEach(el=>{el.innerHTML=dotMarkSvg(+el.dataset.step,+el.dataset.r,null);});
+  dotify(document);
+
+  render();
+
+  document.getElementById('wl').addEventListener('submit',e=>{e.preventDefault();document.getElementById('wl-ok').hidden=false;});
+})();
+</script>
+
+</body>
+</html>

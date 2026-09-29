@@ -1,0 +1,44 @@
+---
+import Mark from './Mark.astro';
+
+interface Props { id: string; note?: string }
+const { id, note = 'Early access for builders. No spam, one email when it’s ready.' } = Astro.props;
+---
+<form class="waitlist" data-waitlist novalidate>
+  <div class="fields">
+    <label class="visually-hidden" for={`${id}-email`}>Email address</label>
+    <input id={`${id}-email`} name="email" type="email" autocomplete="email" placeholder="you@studio.dev" required />
+    <button class="btn" type="submit" data-magnetic>
+      <span class="spin" aria-hidden="true"><Mark motion="turning" /></span>
+      <span class="txt">Join the waitlist</span>
+      <span class="arrow" aria-hidden="true">→</span>
+    </button>
+  </div>
+  <p class="status" role="status" aria-live="polite">
+    <span class="note">{note}</span>
+  </p>
+</form>
+
+<style>
+  .waitlist { display: flex; flex-direction: column; gap: 12px; }
+  .fields { display: flex; flex-wrap: wrap; gap: 8px; }
+  input {
+    font: inherit; font-size: 17px; flex: 1 1 240px; max-width: 340px; min-width: 0;
+    padding: 14px 16px; border: 1px solid var(--k-line); border-radius: 0;
+    background: var(--k-surface); color: var(--k-ink);
+    transition: border-color .2s, box-shadow .25s var(--ease);
+  }
+  input::placeholder { color: var(--k-graphite); }
+  input:hover { border-color: var(--k-graphite); }
+  input:focus { outline: none; border-color: var(--k-ink); box-shadow: 0 0 0 4px color-mix(in srgb, var(--k-orange) 22%, transparent); }
+  .waitlist.invalid input { border-color: var(--k-orange); animation: nudge .35s var(--ease); }
+  @keyframes nudge { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+  .spin { display: none; width: 16px; }
+  .spin :global(.mark) { width: 16px; height: auto; overflow: visible; }
+  .waitlist.busy .spin { display: inline-block; }
+  .waitlist.busy .arrow { display: none; }
+  .status { font-family: var(--k-font-mono); font-size: 12.5px; color: var(--k-graphite); min-height: 1.5em; }
+  .status :global(.held) { color: var(--k-green); }
+  .status :global(.stop) { color: var(--k-orange-text); }
+  .waitlist.done .fields { opacity: .5; pointer-events: none; }
+</style>

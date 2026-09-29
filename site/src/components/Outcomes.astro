@@ -1,0 +1,54 @@
+---
+import Mark from './Mark.astro';
+import Rise from './Rise.astro';
+---
+<section class="section outcomes">
+  <div class="wrap">
+    <div class="head">
+      <p class="label" data-scramble data-reveal>What changes</p>
+      <Rise lines={['Less babysitting.', 'More building.']} />
+    </div>
+    <div class="grid">
+      <div class="item" data-reveal>
+        <div class="vis turnhost"><Mark motion="turnable" /></div>
+        <h3>What you built stays built.</h3>
+        <p>New features stop quietly undoing old ones.</p>
+      </div>
+      <div class="item" data-reveal style="--d:.1s">
+        <div class="vis"><span class="readout once">1<span>×</span></span></div>
+        <h3>Say it once.</h3>
+        <p>No re-explaining at the start of every session.</p>
+      </div>
+      <div class="item" data-reveal style="--d:.2s">
+        <div class="vis diff" aria-hidden="true">
+          <span class="bar add" style="--w:64%"></span>
+          <span class="bar add" style="--w:40%"></span>
+          <span class="bar del" style="--w:22%"></span>
+        </div>
+        <h3>Diffs you expected.</h3>
+        <p>Changes stay inside what the task needs.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(40px, 6vw, 88px); max-width: 1100px; margin-inline: auto; }
+  @media (max-width: 820px) { .grid { grid-template-columns: 1fr; max-width: 420px; } }
+  .item { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; }
+  .vis { height: 132px; width: 100%; display: grid; place-items: center; margin-bottom: 10px; color: var(--k-ink); }
+  .turnhost :global(.mark) { height: 110px; width: auto; overflow: visible; }
+  .item:hover .turnhost :global(.turnable) { transform: rotate(180deg); }
+  .once { font-size: 112px; color: var(--k-ink); display: inline-flex; align-items: baseline; transition: color .3s; }
+  .once span { font-size: .5em; margin-left: 4px; color: var(--k-orange-text); }
+  .item:hover .once { color: var(--k-orange-text); }
+  .diff { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 10px; width: 180px; margin-inline: auto; }
+  .bar { height: 18px; width: var(--w); transition: width .7s var(--ease); }
+  .bar.add { background: var(--k-green); }
+  .bar.del { background: var(--k-orange); }
+  .item:hover .bar:nth-child(1) { width: 52%; }
+  .item:hover .bar:nth-child(2) { width: 30%; }
+  .item:hover .bar:nth-child(3) { width: 12%; }
+  h3 { font-size: clamp(26px, 2.4vw, 32px); }
+  p { color: var(--k-graphite); font-size: 18px; max-width: 26ch; }
+</style>
