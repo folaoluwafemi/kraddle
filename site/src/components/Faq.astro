@@ -1,31 +1,42 @@
 ---
-import Mark from './Mark.astro';
 import Rise from './Rise.astro';
 
 const faqs = [
   {
-    q: 'Does Kraddle replace Claude Code, Cursor or Codex?',
-    a: 'No. It gives the agents you already use the right context, and it also comes as its own agent in Zed and the desktop app.',
+    q: 'What is Kraddle, exactly?',
+    a: 'A workspace we’re building for people who build with AI. It connects what you’ve decided, why you chose it, and the parts of your project it affects—so those choices can guide agent work and be checked as the project changes.',
   },
   {
     q: 'How is this different from a CLAUDE.md or a rules file?',
-    a: 'A rules file is a note the agent may or may not read, and it goes stale. Kraddle builds its map from the code itself, keeps it current, and hands over only what each step needs.',
+    a: 'A rules file is useful, but someone has to keep it current and the agent has to follow it. Kraddle’s direction is to connect decisions to code, reasons, and checks: show when the context has changed, bring the relevant choices into a task, and check governed changes against them.',
   },
   {
-    q: 'Do I have to write anything up first?',
-    a: 'No. Point it at your repository. You can add heuristics, the reasons behind how you build, whenever you like.',
+    q: 'Am I going to spend all day approving decisions?',
+    a: 'That would defeat the point. The intended workflow captures decisions as you work and brings consequential choices to your attention. Routine acceptance can follow permissions you’ve already given. The interaction is still being developed; reducing that ceremony is a core product requirement.',
   },
   {
     q: 'Does my code leave my machine?',
-    a: 'Kraddle runs locally, next to your code, and keeps its map in your project.',
+    a: 'The current foundation runs locally and stores its workspace beside your project. If you use a cloud coding agent, that agent may send code or context to its model provider. Local storage doesn’t change the data policy of the agent you choose.',
   },
   {
     q: 'Which languages does it support?',
-    a: 'Any language with a language server, which covers nearly every mainstream language. Kraddle reads code through the same standard your editor already uses.',
+    a: 'The current prototype analyzes JavaScript and TypeScript imports. Broader parsing and semantic indexing are next. We’ll publish supported languages as the adapters are built and checked.',
   },
   {
-    q: 'When can I use it?',
-    a: 'Join the waitlist. We’re letting builders in gradually and will email you once, when your spot is ready.',
+    q: 'Can I use it with the agents I already use?',
+    a: 'The prototype exposes a small MCP interface that compatible clients can use for checked file writes. The full decision-aware workspace and harness are still being built. The goal is to keep your project’s decisions useful across agents, rather than tie them to one model.',
+  },
+  {
+    q: 'What if I change my mind?',
+    a: 'That’s part of the design. Revisit a choice, see the reasons and connected parts, and explore a different direction. Keep the earlier rationale in history so a future agent can understand why things changed.',
+  },
+  {
+    q: 'Does it guarantee an agent can’t break anything?',
+    a: 'No. The current prototype checks a narrow set of architecture rules before writes made through its tools, and detects unapproved file changes when a session finishes. It isn’t a sandbox. The broader product is being built to make its checks, gaps, and conflicts visible so you can judge what’s actually established.',
+  },
+  {
+    q: 'What’s ready today?',
+    a: 'The local control foundation and a small agent interface exist. Continuous indexing, conversation-based decision capture, and the full workspace are still in development. The scenes on this page illustrate that intended workflow; they aren’t recordings of a shipping app.',
   },
 ];
 ---
@@ -38,7 +49,7 @@ const faqs = [
     <div class="list">
       {faqs.map((f, i) => (
         <details class="item" data-reveal style={`--d:${i * 0.05}s`}>
-          <summary><span>{f.q}</span><span class="ico" aria-hidden="true"><Mark /></span></summary>
+          <summary><span>{f.q}</span><span class="ico" aria-hidden="true"></span></summary>
           <div class="ans"><p>{f.a}</p></div>
         </details>
       ))}
@@ -51,16 +62,18 @@ const faqs = [
   .grid { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 48px; align-items: start; }
   @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
   .side { display: flex; flex-direction: column; gap: 18px; position: sticky; top: 110px; }
+  @media (max-width: 860px) { .side { position: static; } }
   .side :global(h2) { font-size: clamp(40px, 5vw, 68px); }
   .list { border-top: 1px solid var(--k-line); }
   .item { border-bottom: 1px solid var(--k-line); }
   summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 24px 4px; font-size: clamp(19px, 1.8vw, 23px); transition: color .2s, padding .4s var(--ease); }
   summary::-webkit-details-marker { display: none; }
   summary:hover { padding-left: 12px; }
-  .ico { width: 22px; flex: none; color: var(--k-graphite); transition: color .3s; }
-  .ico :global(.mark) { width: 22px; height: auto; overflow: visible; transition: transform .7s var(--ease-turn); }
+  .ico { width: 20px; height: 20px; position: relative; flex: none; color: var(--k-graphite); transition: color .3s; }
+  .ico::before, .ico::after { content: ''; position: absolute; inset: 9px 1px auto; height: 2px; background: currentColor; transition: transform .5s var(--ease); }
+  .ico::after { transform: rotate(90deg); }
   .item[open] .ico { color: var(--k-orange); }
-  .item[open] .ico :global(.mark) { transform: rotate(180deg); }
+  .item[open] .ico::after { transform: rotate(0deg); }
   .ans { overflow: hidden; }
   .ans p { padding: 0 4px 26px; color: var(--k-graphite); font-size: 18px; max-width: 58ch; }
   .item[open] .ans p { animation: open .5s var(--ease); }

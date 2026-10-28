@@ -3,21 +3,21 @@ import Mark from './Mark.astro';
 import Rise from './Rise.astro';
 
 const modes = [
-  { title: 'Agent', caption: 'Every step starts with exactly what it needs.' },
-  { title: 'Ideas', caption: 'Brainstorm inside what you’ve already chosen.' },
-  { title: 'Taste', caption: 'Write down why once. See it in every change.' },
+  { title: 'Build', caption: 'The next task starts with the decisions you’ve already made.' },
+  { title: 'Explore', caption: 'See what a new direction touches. Keep the reason for the old one.' },
+  { title: 'Your taste', caption: 'The way you like to build becomes part of the project.' },
 ];
 const context = [
-  ['Prices are only calculated on the server', 'api/pricing.ts'],
-  ['Discounts apply before tax', 'you · 3 weeks ago'],
-  ['Checkout keeps its step order', 'checkout/flow.ts'],
-  ['Client-side totals were tried and dropped', 'history · March'],
+  ['Searching keeps active filters', 'your decision · last session'],
+  ['Recently updated comes first', 'you · so you can resume your work'],
+  ['Projects use the shared list component', 'src/ui/ProjectList.tsx'],
+  ['Alphabetical sorting was tried and dropped', 'history · last week'],
 ];
-const affects = [['Refunds', 90], ['Payouts', 75], ['Receipt emails', 35], ['Checkout screen', 20]] as const;
+const affects = ['Navigation', 'Saved filters', 'Project cards', 'Empty states'];
 const heuristics = [
   ['One component, many looks', 23, true],
   ['Errors say how to fix them', 41, false],
-  ['Server owns the money', 17, false],
+  ['UI uses shared components', 17, false],
   ['No new dependency without a reason', 9, false],
 ] as const;
 ---
@@ -25,17 +25,17 @@ const heuristics = [
   <div class="dots" aria-hidden="true"></div>
   <div class="wrap">
     <div class="head">
-      <p class="label" data-scramble data-reveal>In practice</p>
+      <p class="label" data-scramble data-reveal>Product preview · the workspace we’re building</p>
       <Rise lines={['One calm place', 'to build.']} />
     </div>
 
     <div class="show" data-show>
       <div class="tilt" data-tilt>
-        <div class="app" role="img" aria-label="The Kraddle desktop app: projects and sessions on the left, an agent session in the middle, and the context for the current step on the right">
+        <div class="app">
           <div class="bar">
             <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
-            <span class="where mono">acme-shop</span>
-            <span class="ok mono"><i></i>Up to date</span>
+            <span class="where mono">my-projects</span>
+            <span class="ok mono"><i></i>Workflow preview</span>
             <span class="me">F</span>
           </div>
 
@@ -45,15 +45,15 @@ const heuristics = [
               <div class="search"><span>Search</span><kbd class="mono">⌘K</kbd></div>
               <p class="grp mono">Projects</p>
               <ul>
-                <li class="on"><i style="background:#FF5A1F"></i>acme-shop</li>
+                <li class="on"><i style="background:#FF5A1F"></i>my-projects</li>
                 <li><i style="background:#3C9A5F"></i>portfolio-site</li>
                 <li><i style="background:#6B6B66"></i>side-quest</li>
               </ul>
               <p class="grp mono">Sessions</p>
               <ul>
-                <li class="on"><span class="live"></span>Discount codes</li>
-                <li><span class="parked mono">parked</span>Crypto payments</li>
-                <li><span class="done">✓</span>Price components</li>
+                <li class="on"><span class="live"></span>Search projects</li>
+                <li><span class="parked mono">parked</span>Group by client</li>
+                <li><span class="done">✓</span>Project cards</li>
               </ul>
               <div class="foot">
                 <span>Heuristics <b class="mono">12</b></span>
@@ -61,63 +61,63 @@ const heuristics = [
               </div>
             </aside>
 
-            <main class="main">
+            <div class="main">
               <header class="mhead">
                 <div>
-                  <p class="stitle">Discount codes</p>
+                  <p class="stitle">Search projects</p>
                   <p class="ssub mono">session · started 4 min ago</p>
                 </div>
                 <div class="seg" role="tablist" aria-label="Modes">
                   {modes.map((m, i) => (
-                    <button type="button" role="tab" aria-selected={i === 0 ? 'true' : 'false'} data-go={i}>{m.title}<span class="bar2" aria-hidden="true"><span></span></span></button>
+                    <button type="button" role="tab" id={`show-tab-${i}`} tabindex={i === 0 ? '0' : '-1'} aria-controls={`show-panel-${i}`} aria-selected={i === 0 ? 'true' : 'false'} data-go={i}>{m.title}</button>
                   ))}
                 </div>
               </header>
 
               <div class="panes">
                 <!-- Agent -->
-                <div class="pane agent on" data-panel="0">
-                  <div class="msg me"><p>Add a discount code field to checkout</p></div>
+                <div class="pane agent on" data-panel="0" id="show-panel-0" role="tabpanel" aria-labelledby="show-tab-0">
+                  <div class="msg me"><p>Add search to my projects</p></div>
                   <div class="typing" aria-hidden="true"><i></i><i></i><i></i></div>
                   <div class="plan" data-seq>
                     <p class="ph mono">Plan</p>
                     <ul>
-                      <li style="--i:0"><span class="c"></span>Add a code field to the checkout screen</li>
-                      <li style="--i:1"><span class="c"></span>Apply the discount on the server, before tax</li>
-                      <li style="--i:2"><span class="c"></span>Keep the step order as it is</li>
+                      <li style="--i:0"><span class="c"></span>Add search using the shared list component</li>
+                      <li style="--i:1"><span class="c"></span>Keep active filters while searching</li>
+                      <li style="--i:2"><span class="c"></span>Preserve recently-updated sorting</li>
                     </ul>
                   </div>
                   <div class="file t1" data-seq>
-                    <div class="fh"><span class="mono">ui/Checkout.tsx</span><span class="add mono">+18</span><span class="del mono">−2</span></div>
-                    <pre class="mono"><span class="a">+ &lt;DiscountField onApply={'{'}applyCode{'}'} /&gt;</span></pre>
+                    <div class="fh"><span class="mono">Checks</span><span class="add mono">2 passed</span></div>
+                    <pre class="mono"><span class="a">✓ Search respects active filters</span></pre>
                   </div>
                   <div class="file t2" data-seq>
-                    <div class="fh"><span class="mono">api/pricing.ts</span><span class="add mono">+11</span><span class="del mono">−0</span></div>
-                    <pre class="mono"><span class="a">+ export function applyDiscount(total, code) {'{'}</span></pre>
+                    <div class="fh"><span class="mono">Existing decision</span></div>
+                    <pre class="mono"><span class="a">✓ Recently updated still comes first</span></pre>
                   </div>
-                  <div class="msg bot" data-seq><p>Done. Two files changed, nothing else touched.</p></div>
+                  <div class="msg bot" data-seq><p>Filters and sorting checked. The new “no results” screen still needs your eye.</p></div>
                 </div>
 
                 <!-- Ideas -->
-                <div class="pane ideas" data-panel="1" data-ideation>
-                  <div class="msg me"><p>What if people could pay in crypto?</p></div>
+                <div class="pane ideas" data-panel="1" data-ideation id="show-panel-1" role="tabpanel" aria-labelledby="show-tab-1" inert>
+                  <div class="msg me"><p>What if we grouped projects by client?</p></div>
                   <div class="msg bot k">
-                    <p>Payments are Stripe-only right now, chosen in March to keep refunds simple. Crypto would need a second refund flow and payouts in two currencies.</p>
+                    <p>You chose one flat list so personal projects wouldn’t need a client. Grouping would affect navigation, saved filters, and projects without a client.</p>
                     <div class="choices">
                       <button type="button" class="choice" data-choice="explore">Explore it anyway</button>
                       <button type="button" class="choice" data-choice="park">Park it for later</button>
                     </div>
                   </div>
-                  <div class="msg bot reply" data-reply="explore" hidden><p>Okay. I’ll draft a plan that keeps Stripe as the default and adds crypto beside it.</p></div>
-                  <div class="msg bot reply" data-reply="park" hidden><p><span class="held mono">held</span> Parked. I’ll bring it back the next time payments come up.</p></div>
+                  <div class="msg bot reply" data-reply="explore" hidden><p>I’ll sketch client groups with an ungrouped space for personal work. The original choice and its reason stay in history.</p></div>
+                  <div class="msg bot reply" data-reply="park" hidden><p><span class="held mono">held</span> Parked with the affected decisions. We can pick this thread up later.</p></div>
                   <div class="dirs">
-                    <div class="dir cur"><span class="mono">current</span><b>Stripe only</b></div>
-                    <div class="dir new"><span class="mono">exploring</span><b>Stripe + crypto</b></div>
+                    <div class="dir cur"><span class="mono">current</span><b>One flat list</b></div>
+                    <div class="dir new"><span class="mono">alternative</span><b>Client groups</b></div>
                   </div>
                 </div>
 
                 <!-- Taste -->
-                <div class="pane taste" data-panel="2" data-taste>
+                <div class="pane taste" data-panel="2" data-taste id="show-panel-2" role="tabpanel" aria-labelledby="show-tab-2" inert>
                   <ul class="hlist">
                     {heuristics.map(([name, n, on]) => <li class={on ? 'on' : ''}><span>{name}</span><span class="mono cnt">{n}×</span></li>)}
                   </ul>
@@ -134,26 +134,26 @@ const heuristics = [
 
               <div class="composer" aria-hidden="true">
                 <span>Ask, or type / for commands</span>
-                <span class="model mono">any model ▾</span>
+                <span class="model mono">your agent</span>
                 <span class="send">↑</span>
               </div>
-            </main>
+            </div>
 
             <aside class="insp">
               <div class="ipane on" data-ipanel="0">
                 <p class="grp mono">This step</p>
-                <div class="read"><span class="readout big">04</span><span class="mono small">of 1,318 facts<br />in context</span></div>
+                <div class="read"><span class="readout big">04</span><span class="mono small">relevant choices<br />and their sources</span></div>
                 <ul class="ctx">
                   {context.map(([what, from], i) => <li style={`--i:${i}`}><span class="dot"></span><span><b>{what}</b><span class="mono src">{from}</span></span></li>)}
                 </ul>
-                <p class="skip mono">1,314 skipped · not needed</p>
+                <p class="skip mono">An open question stays visible. A passed check has a reason.</p>
               </div>
               <div class="ipane" data-ipanel="1">
                 <p class="grp mono">Would affect</p>
                 <ul class="impact">
-                  {affects.map(([n, v]) => <li><span>{n}</span><span class="meter"><span style={`--v:${v}%`}></span></span></li>)}
+                  {affects.map((n) => <li><span>{n}</span><span class="impact-link mono">connected</span></li>)}
                 </ul>
-                <p class="skip mono">Nothing changes until you choose.</p>
+                <p class="skip mono">Illustrative impact map · revisit the choice before changing the project.</p>
               </div>
               <div class="ipane" data-ipanel="2">
                 <p class="grp mono">Applied recently</p>
@@ -197,7 +197,7 @@ const heuristics = [
   .ok { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: #2F7D4C; background: #E3EFE6; padding: 3px 8px; border-radius: 999px; }
   .ok i { width: 6px; height: 6px; border-radius: 50%; background: #3C9A5F; animation: pulse 2s var(--ease) infinite; }
   @keyframes pulse { 50% { opacity: .35; } }
-  .me { width: 24px; height: 24px; border-radius: 50%; background: #121212; color: #F2F2EE; display: grid; place-items: center; font-size: 11px; font-weight: 600; }
+  .bar > .me { width: 24px; height: 24px; border-radius: 50%; background: #121212; color: #F2F2EE; display: grid; place-items: center; font-size: 11px; font-weight: 600; }
 
   .body { display: grid; grid-template-columns: 210px minmax(0, 1fr) 270px; height: clamp(520px, 50vw, 600px); }
   @media (max-width: 1000px) { .body { grid-template-columns: 190px minmax(0, 1fr); } .insp { display: none; } }
@@ -231,14 +231,10 @@ const heuristics = [
   .seg button:hover { color: var(--ink); }
   .seg button[aria-selected="true"] { background: var(--bg); color: var(--ink); box-shadow: 0 1px 2px rgba(18,18,18,.12), 0 0 0 1px var(--line); }
   .seg button:focus-visible { outline: 2px solid #FF5A1F; }
-  .bar2 { position: absolute; left: 8px; right: 8px; bottom: 2px; height: 2px; border-radius: 2px; overflow: hidden; }
-  .bar2 span { display: block; height: 100%; background: #FF5A1F; transform: scaleX(0); transform-origin: 0 50%; }
-  .seg button[aria-selected="true"] .bar2 span { animation: fill var(--dur, 7s) linear forwards; }
-  .show.paused .seg button[aria-selected="true"] .bar2 span { animation-play-state: paused; }
-  @keyframes fill { to { transform: scaleX(1); } }
 
   .panes { position: relative; flex: 1; overflow: hidden; }
   .pane { position: absolute; inset: 0; padding: 18px 20px 80px; display: flex; flex-direction: column; gap: 12px; opacity: 0; visibility: hidden; transform: translateY(8px); transition: opacity .4s var(--ease), transform .55s var(--ease), visibility 0s .4s; }
+  .pane > * { flex-shrink: 0; }
   .pane.on { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
   .msg { max-width: 84%; border-radius: 10px; padding: 10px 13px; }
   .msg p { font-size: 14.5px; line-height: 1.5; }
@@ -324,12 +320,12 @@ const heuristics = [
   .src { font-size: 10.5px; color: var(--muted); }
   .skip { font-size: 10.5px; color: var(--muted); padding-top: 8px; border-top: 1px dashed var(--line); }
   .impact li { display: grid; grid-template-columns: 1fr 90px; gap: 10px; align-items: center; font-size: 13px; }
-  .meter { height: 6px; border-radius: 3px; background: var(--side); overflow: hidden; }
-  .meter span { display: block; height: 100%; width: 0; background: #FF5A1F; border-radius: 3px; transition: width 1s var(--ease) .2s; }
-  .ipane.on .meter span { width: var(--v); }
+  .impact-link { color: #C4420E; font-size: 10px; }
   .recent li { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
 
   .caps { position: relative; width: 100%; min-height: 36px; text-align: center; }
   .cap { position: absolute; inset: 0; font-size: clamp(18px, 1.8vw, 22px); color: #121212; opacity: 0; transform: translateY(6px); transition: opacity .4s, transform .5s var(--ease); }
   .cap.on { opacity: 1; transform: none; }
+  .pane:not(.on), .cap:not(.on) { visibility: hidden; }
+  @media (max-width: 700px) { .side { display: none; } .main { min-width: 0; } .mhead { flex-wrap: wrap; gap: 12px; } .body { height: 640px; } .pane { overflow-y: auto; overflow-x: hidden; } .msg { max-width: 100%; } .bar .ok { font-size: 9px; } }
 </style>

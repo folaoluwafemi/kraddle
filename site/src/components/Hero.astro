@@ -5,12 +5,13 @@ import Rise from './Rise.astro';
 <section class="hero" id="waitlist">
   <canvas class="field" data-dotfield="right" aria-hidden="true"></canvas>
   <div class="wrap copy">
-    <p class="label" data-scramble data-reveal data-clear>Early access · for builders</p>
-    <Rise as="h1" lines={['The right context.', 'Every agent.', 'Every step.']} accentLast clear />
+    <p class="label" data-scramble data-reveal data-clear>For builders working with AI · in development</p>
+    <Rise as="h1" lines={['Keep what you', 'already got right.']} accentLast clear />
     <p class="sub" data-reveal data-clear style="--d:.35s">
-      Agents get too little context or too much, so they break what already worked. Kraddle gives every agent exactly what it needs to know.
+      You finally get it right. The next agent changes it. Kraddle carries what you’ve decided—and why—into each task, then checks changes against those decisions.
     </p>
     <div data-reveal data-clear style="--d:.5s"><WaitlistForm id="hero" /></div>
+    <a class="story-link link" href="#why" data-reveal data-clear style="--d:.6s">See one small change go wrong <span aria-hidden="true">↓</span></a>
   </div>
   <p class="hint label" aria-hidden="true" data-clear><span class="cursor"></span>Move your cursor · click anywhere</p>
 </section>
@@ -25,14 +26,16 @@ import Rise from './Rise.astro';
   .field { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--k-ink); --field-faint: var(--k-graphite); }
   .copy { position: relative; z-index: 1; width: 100%; display: flex; flex-direction: column; gap: 26px; pointer-events: none; }
   .copy > * { pointer-events: auto; max-width: 720px; }
-  .hero :global(h1) { font-size: clamp(46px, 6vw, 96px); line-height: .96; letter-spacing: -.035em; }
-  .sub { font-size: clamp(21px, 2vw, 27px); line-height: 1.38; color: var(--k-ink); max-width: 34ch !important; }
+  .hero :global(h1) { font-size: clamp(42px, 5.8vw, 88px); line-height: 1; letter-spacing: -.035em; }
+  .sub { font-size: clamp(20px, 2vw, 25px); line-height: 1.42; color: var(--k-ink); max-width: 38ch !important; }
+  .story-link { align-self: flex-start; font-size: 16px; }
   .hint { position: absolute; left: var(--gutter); bottom: 24px; display: flex; align-items: center; gap: 10px; z-index: 1; }
   .cursor { width: 14px; height: 20px; border: 1.5px solid currentColor; border-radius: 8px; position: relative; }
   .cursor::after { content: ''; position: absolute; left: 50%; top: 4px; width: 2px; height: 4px; margin-left: -1px; background: currentColor; border-radius: 1px; animation: wheel 1.6s var(--ease) infinite; }
   @keyframes wheel { 0% { opacity: 0; transform: translateY(-2px); } 40% { opacity: 1; } 100% { opacity: 0; transform: translateY(5px); } }
   @media (max-width: 900px) {
-    .hero { align-items: flex-end; padding-top: 220px; }
+    .hero { align-items: center; padding-top: 120px; }
     }
   @media (hover: none) { .hint { display: none; } }
+  @media (max-width: 700px) { .hint { display: none; } }
 </style>

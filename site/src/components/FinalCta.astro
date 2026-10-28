@@ -5,12 +5,13 @@ import Rise from './Rise.astro';
 <section class="final" id="use">
   <canvas class="field" data-dotfield="center" aria-hidden="true"></canvas>
   <div class="wrap inner">
-    <Rise lines={['Build what’s in your head.', 'Kraddle holds the rest.']} accentLast clear />
+    <Rise lines={['Build the next thing.', 'Keep what matters.']} accentLast clear />
+    <p class="closing" data-reveal data-clear>Your ideas can change. The reasons behind them don’t have to disappear.</p>
     <div class="form" data-reveal data-clear style="--d:.3s"><WaitlistForm id="end" note="One email when your spot is ready. Nothing else." /></div>
     <ul class="where" data-reveal data-clear style="--d:.4s">
-      <li><span class="mono">Zed</span><em>soon</em></li>
-      <li><span class="mono">Desktop app</span><em>soon</em></li>
-      <li><span class="mono">Beyond code</span><em>later</em></li>
+      <li><span class="mono">Local first</span></li>
+      <li><span class="mono">Built for coding agents</span></li>
+      <li><span class="mono">In development</span></li>
     </ul>
   </div>
 </section>
@@ -22,6 +23,7 @@ import Rise from './Rise.astro';
   .inner > * { pointer-events: auto; }
   .inner :global(h2) { font-size: clamp(44px, 7vw, 104px); line-height: 1; letter-spacing: -.035em; }
   .form :global(.fields) { justify-content: center; }
+  .closing { font-size: clamp(20px, 2vw, 25px); color: var(--k-graphite); max-width: 42ch; }
   .form :global(.status) { text-align: center; }
   .where { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
   .where li { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--k-line); background: var(--k-paper); font-size: 13px; transition: border-color .3s, transform .4s var(--ease); }

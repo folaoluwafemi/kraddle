@@ -1,13 +1,26 @@
 ---
-import MediaFrame from './MediaFrame.astro';
+import Rise from './Rise.astro';
 ---
-<section class="demo" aria-label="Product recording">
-  <div class="wrap">
-    <MediaFrame kind="video" label="Kraddle mapping a real codebase, then an agent working from it" />
+<section class="section memory"><div class="wrap">
+  <div class="head"><p class="label" data-scramble data-reveal>A project with a memory</p><Rise lines={['Your choices.', 'Their reasons.', 'Still connected.']} /><p data-reveal>Chats move on. Decisions should stay useful.</p></div>
+  <div class="chain">
+    <article data-reveal><span class="n readout">01</span><h3>Keep the why.</h3><p>Capture a choice as you work, along with its reason and the alternatives you ruled out.</p><div class="example"><span class="mono">Decision</span><b>Recently updated first</b><small>“I want to resume what I was working on.”</small></div></article>
+    <article data-reveal style="--d:.1s"><span class="n readout">02</span><h3>Carry it forward.</h3><p>Connect it to the parts of your project it affects. Bring the relevant choices into the next task.</p><div class="example"><span class="mono">Next task · add search</span><b>Preserve filters and sorting</b><small>Linked to the projects list and your earlier choice.</small></div></article>
+    <article data-reveal style="--d:.2s"><span class="n readout">03</span><h3>Check what changed.</h3><p>See what was checked, what conflicts, and what still needs your judgment. Revisit a decision when it stops fitting.</p><div class="example"><span class="mono">Review</span><b>Search respects the existing list</b><small>Filters and sorting checked. The new empty state needs a look.</small></div></article>
   </div>
-</section>
-
+  <p class="concept mono">The workflow we’re building · examples are illustrative</p>
+</div></section>
 <style>
-  .demo { padding-block: 0 clamp(96px, 12vw, 160px); }
-  .demo :global(.frame) { max-width: 1100px; margin-inline: auto; }
+  .memory { border-bottom: 1px solid var(--k-line); }
+  .chain { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; }
+  article { border-top: 1px solid var(--k-line); padding-top: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .n { font-size: 30px; color: var(--k-orange-text); }
+  h3 { font-size: clamp(28px, 3vw, 40px); }
+  article > p { font-size: 19px; color: var(--k-graphite); }
+  .example { margin-top: auto; padding: 18px; border: 1px solid var(--k-line); background: var(--k-surface); display: flex; flex-direction: column; gap: 9px; }
+  .example > span { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--k-graphite); }
+  .example b { font-size: 18px; font-weight: 600; }
+  .example small { font-size: 15px; color: var(--k-graphite); }
+  .concept { text-align: center; font-size: 11px; color: var(--k-graphite); margin-top: 28px; }
+  @media (max-width: 800px) { .chain { grid-template-columns: 1fr; gap: 36px; max-width: 520px; margin-inline: auto; } }
 </style>

@@ -3,8 +3,8 @@ import '../styles/global.css';
 
 interface Props { title?: string; description?: string }
 const {
-  title = 'Kraddle · The right context. Every agent. Every step.',
-  description = 'Kraddle maps what every part of your project is for and what it must keep true, then gives every coding agent exactly the context it needs, at every step.',
+  title = 'Kraddle · Keep what you already got right.',
+  description = 'A workspace for building with AI that carries your decisions and their reasons into each task, checks changes against them, and helps you see what a new direction would affect. In development.',
 } = Astro.props;
 ---
 <!doctype html>
@@ -27,6 +27,7 @@ const {
     <script is:inline>document.documentElement.classList.add('js');</script>
   </head>
   <body>
+    <a class="skip-link" href="#top">Skip to content</a>
     <slot />
     <script>import '../scripts/interactions.ts';</script>
   </body>

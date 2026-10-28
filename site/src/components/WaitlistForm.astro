@@ -3,24 +3,30 @@ import Mark from './Mark.astro';
 
 interface Props { id: string; note?: string }
 const { id, note = 'Early access for builders. No spam, one email when it’s ready.' } = Astro.props;
+const endpoint = import.meta.env.PUBLIC_WAITLIST_ENDPOINT?.trim();
 ---
-<form class="waitlist" data-waitlist novalidate>
+{endpoint ? <form class="waitlist" data-waitlist method="post" action={endpoint} novalidate>
+  <label class="email-label" for={`${id}-email`}>Your email for early access</label>
   <div class="fields">
-    <label class="visually-hidden" for={`${id}-email`}>Email address</label>
-    <input id={`${id}-email`} name="email" type="email" autocomplete="email" placeholder="you@studio.dev" required />
+    <input id={`${id}-email`} name="email" type="email" inputmode="email" autocomplete="email" placeholder="you@studio.dev" aria-describedby={`${id}-status`} required />
     <button class="btn" type="submit" data-magnetic>
       <span class="spin" aria-hidden="true"><Mark motion="turning" /></span>
       <span class="txt">Join the waitlist</span>
       <span class="arrow" aria-hidden="true">→</span>
     </button>
   </div>
-  <p class="status" role="status" aria-live="polite">
+  <p class="status" id={`${id}-status`} role="status" aria-live="polite">
     <span class="note">{note}</span>
   </p>
-</form>
+</form> : <div class="waitlist">
+  <a class="btn" href="#see">Explore the workflow <span class="arrow" aria-hidden="true">→</span></a>
+  <p class="status">In development. Early-access signups open soon.</p>
+</div>}
 
 <style>
   .waitlist { display: flex; flex-direction: column; gap: 12px; }
+  .waitlist > .btn { align-self: flex-start; }
+  .email-label { font-size: 14px; color: var(--k-graphite); }
   .fields { display: flex; flex-wrap: wrap; gap: 8px; }
   input {
     font: inherit; font-size: 17px; flex: 1 1 240px; max-width: 340px; min-width: 0;

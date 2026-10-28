@@ -1,11 +1,6 @@
 ---
 import Mark from './Mark.astro';
 const word = 'kraddle'.split('');
-// Social links are placeholders until the accounts exist.
-const follow = [
-  { label: 'X / Twitter', href: '#' },
-  { label: 'GitHub', href: '#' },
-];
 ---
 <footer class="footer" data-footer>
   <div class="wrap top">
@@ -22,13 +17,14 @@ const follow = [
         <a class="link" href="#faq">Questions</a>
       </div>
       <div>
-        <p class="label">Follow</p>
-        {follow.map((f) => <a class="link" href={f.href}>{f.label}</a>)}
-        <a class="link" href="#waitlist">Waitlist</a>
+        <p class="label">Explore</p>
+        <a class="link" href="#why">The story</a>
+        <a class="link" href="#see">The workspace</a>
+        <a class="link" href="#waitlist">Early access</a>
       </div>
     </nav>
     <a class="up" href="#top" data-up aria-label="Back to top">
-      <span class="upmark"><Mark motion="turnable" /></span>
+      <span class="upmark"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 20V4m-7 7 7-7 7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg></span>
       <span class="mono">Back to top</span>
     </a>
   </div>
@@ -40,7 +36,7 @@ const follow = [
 
   <div class="wrap bottom">
     <p class="mono">© 2026 Almost Impossible, Inc.</p>
-    <p class="mono">The right context. Every agent. Every step.</p>
+    <p class="mono">Keep what you already got right.</p>
   </div>
 </footer>
 
@@ -58,9 +54,9 @@ const follow = [
   .cols .label { color: var(--inv-muted); margin-bottom: 4px; }
   .up { display: inline-flex; flex-direction: column; align-items: center; gap: 12px; text-decoration: none; color: var(--inv-fg); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
   .upmark { width: 64px; height: 64px; display: grid; place-items: center; border: 1px solid var(--inv-line); transition: border-color .3s, background .3s, color .3s; }
-  .upmark :global(.mark) { width: 26px; height: auto; overflow: visible; transform: rotate(-90deg); }
+  .upmark svg { transition: transform .6s var(--ease); }
   .up:hover .upmark { background: var(--k-orange); border-color: var(--k-orange); color: #121212; }
-  .up:hover :global(.turnable) { transform: rotate(180deg); }
+  .up:hover svg { transform: translateY(-4px); }
 
   .giant {
     display: flex; align-items: center; justify-content: center; gap: .02em;

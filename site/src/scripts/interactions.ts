@@ -1,5 +1,7 @@
 import { dotField } from './dotfield';
-import { morph } from './morph';
+import { story } from './story';
+import { workflow } from './workflow';
+import { scrollToSmooth } from './motion';
 
 const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
@@ -31,22 +33,15 @@ const revealer = new IntersectionObserver((entries) => {
 }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
 document.querySelectorAll('[data-reveal], [data-scramble]').forEach((el) => revealer.observe(el));
 
-/* ---------- nav: hides on the way down, returns on the way up; progress line ---------- */
+/* ---------- header stays docked; native scroll progress where supported ---------- */
 const nav = document.querySelector<HTMLElement>('[data-nav]');
 const progress = document.querySelector<HTMLElement>('[data-progress]');
-// Direction is decided over a run of scrolling, not per event, so smooth-scroll
-// wheels (many tiny deltas) don't flip the nav back and forth.
-let lastY = window.scrollY, run = 0;
+const nativeProgress = CSS.supports('(animation-timeline: scroll()) and (animation-range: 0% 100%)');
 function onScroll() {
   const y = window.scrollY;
-  const dy = y - lastY;
-  lastY = y;
-  run = Math.sign(dy) === Math.sign(run) ? run + dy : dy;
   nav?.classList.toggle('scrolled', y > 8);
-  if (y < 400 || run < -60) nav?.classList.remove('tucked');
-  else if (run > 60) nav?.classList.add('tucked');
   const max = document.documentElement.scrollHeight - window.innerHeight;
-  progress?.style.setProperty('--p', String(max > 0 ? Math.min(1, y / max) : 0));
+  if (!nativeProgress) progress?.style.setProperty('--p', String(max > 0 ? Math.min(1, y / max) : 0));
 }
 window.addEventListener('scroll', onScroll, { passive: true });
 onScroll();
@@ -63,72 +58,86 @@ if (finePointer && !reduce) {
   });
 }
 
-/* ---------- dot fields and the problem morph ---------- */
+/* ---------- dot fields and story chapter guide ---------- */
 document.querySelectorAll<HTMLCanvasElement>('[data-dotfield]').forEach((c) => {
   dotField(c, { place: c.dataset.dotfield === 'center' ? 'center' : 'right', markScale: c.dataset.dotfield === 'center' ? 0.72 : 0.74 });
 });
-document.querySelectorAll<HTMLElement>('[data-morph-section]').forEach((s) => morph(s));
+document.querySelectorAll<HTMLElement>('[data-story]').forEach((s) => story(s));
+document.querySelectorAll<HTMLElement>('[data-workflow]').forEach(workflow);
+
+// Keep anchor offsets and focus while using the browser's smooth scrolling.
+document.querySelectorAll<HTMLAnchorElement>('a[href^="#"]:not([data-up])').forEach((link) => {
+  link.addEventListener('click', (e) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const target = document.getElementById(link.hash.slice(1));
+    if (!target) return;
+    e.preventDefault();
+    const offset = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) + parseFloat(getComputedStyle(target).scrollMarginTop || '0');
+    scrollToSmooth(window.scrollY + target.getBoundingClientRect().top - offset);
+    history.pushState(null, '', link.hash);
+    target.setAttribute('tabindex', '-1');
+    target.focus({ preventScroll: true });
+  });
+});
 
 /* ---------- waitlist ---------- */
-const ENDPOINT = import.meta.env.PUBLIC_WAITLIST_ENDPOINT as string | undefined;
+const ENDPOINT = import.meta.env.PUBLIC_WAITLIST_ENDPOINT?.trim() as string | undefined;
 document.querySelectorAll<HTMLFormElement>('[data-waitlist]').forEach((form) => {
   const input = form.querySelector('input') as HTMLInputElement;
   const status = form.querySelector('.status') as HTMLElement;
+  const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+  input.addEventListener('input', () => { input.removeAttribute('aria-invalid'); form.classList.remove('invalid'); });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (form.classList.contains('busy') || form.classList.contains('done')) return;
     if (!input.checkValidity() || !input.value.trim()) {
       form.classList.remove('invalid'); void form.offsetWidth; form.classList.add('invalid');
       status.innerHTML = '<span class="stop">stop</span> · that email doesn’t look right. Check it and try again.';
+      input.setAttribute('aria-invalid', 'true');
       input.focus();
       return;
     }
     form.classList.remove('invalid');
+    input.removeAttribute('aria-invalid');
+    if (!ENDPOINT) {
+      status.textContent = 'Signups aren’t open yet. Your email hasn’t been sent.';
+      return;
+    }
     form.classList.add('busy');
+    form.setAttribute('aria-busy', 'true');
+    submit.disabled = true;
     status.textContent = 'Adding you…';
     try {
-      if (ENDPOINT) {
         const res = await fetch(ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify({ email: input.value.trim() }),
         });
         if (!res.ok) throw new Error(String(res.status));
-      } else {
-        await new Promise((r) => setTimeout(r, 1100));
-        console.info('[waitlist] PUBLIC_WAITLIST_ENDPOINT is not set; nothing was sent.');
-      }
       form.classList.add('done');
       status.innerHTML = '<span class="held">held</span> · you’re on the list. We’ll email you once, when it’s ready.';
     } catch {
       status.innerHTML = '<span class="stop">stop</span> · that didn’t go through. Try again in a moment.';
     } finally {
       form.classList.remove('busy');
+      form.removeAttribute('aria-busy');
+      submit.disabled = form.classList.contains('done');
     }
   });
 });
 
-/* ---------- auto-advancing tab sets (map steps, showcase windows) ---------- */
-function tabSet(root: HTMLElement, opts: { dur: number; onChange: (i: number) => void; tabs: HTMLElement[] }) {
-  let i = 0, timer = 0, started = false, hover = false;
-  root.style.setProperty('--dur', `${opts.dur}ms`);
-  const go = (n: number, user = false) => {
+/* ---------- manually selected tab sets ---------- */
+function tabSet(root: HTMLElement, opts: { onChange: (i: number) => void; tabs: HTMLElement[] }) {
+  let i = 0;
+  const go = (n: number, _user = false) => {
     i = (n + opts.tabs.length) % opts.tabs.length;
-    opts.tabs.forEach((t, k) => t.setAttribute('aria-selected', String(k === i)));
-    // restart the progress bar animation
-    const bar = opts.tabs[i].querySelector<HTMLElement>('.bar span');
-    if (bar) { bar.style.animation = 'none'; void bar.offsetWidth; bar.style.animation = ''; }
+    opts.tabs.forEach((t, k) => {
+      t.setAttribute('aria-selected', String(k === i));
+      t.tabIndex = k === i ? 0 : -1;
+    });
     opts.onChange(i);
-    schedule(user ? opts.dur * 1.6 : opts.dur);
-  };
-  const schedule = (ms: number) => {
-    clearTimeout(timer);
-    if (reduce) return;
-    timer = window.setTimeout(() => { if (!hover) go(i + 1); else schedule(800); }, ms);
   };
   opts.tabs.forEach((t, k) => t.addEventListener('click', () => go(k, true)));
-  root.addEventListener('pointerenter', () => { hover = true; root.classList.add('paused'); });
-  root.addEventListener('pointerleave', () => { hover = false; root.classList.remove('paused'); });
   root.addEventListener('keydown', (e) => {
     if (!(e.target as HTMLElement).matches('[role="tab"]')) return;
     if ((e.key === 'Enter' || e.key === ' ') && (e.target as HTMLElement).tagName !== 'BUTTON') {
@@ -141,23 +150,12 @@ function tabSet(root: HTMLElement, opts: { dur: number; onChange: (i: number) =>
       go(i + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1), true);
       opts.tabs[i].focus();
     }
+    if (e.key === 'Home' || e.key === 'End') {
+      e.preventDefault(); go(e.key === 'Home' ? 0 : opts.tabs.length - 1); opts.tabs[i].focus();
+    }
   });
-  new IntersectionObserver(([e]) => {
-    if (e.isIntersecting && !started) { started = true; go(0); }
-    else if (!e.isIntersecting) clearTimeout(timer);
-    else if (started) schedule(opts.dur);
-  }, { threshold: 0.4 }).observe(root);
+  go(0);
 }
-
-/* use cases: one expands at a time, with its recording or screenshot */
-document.querySelectorAll<HTMLElement>('[data-cases]').forEach((root) => {
-  const shots = [...root.querySelectorAll<HTMLElement>('[data-shot]')];
-  tabSet(root, {
-    dur: 8000,
-    tabs: [...root.querySelectorAll<HTMLElement>('[data-go]')],
-    onChange: (n) => shots.forEach((s, k) => s.classList.toggle('on', k === n)),
-  });
-});
 
 /* showcase: the desktop app switches modes; each mode plays its own little sequence */
 document.querySelectorAll<HTMLElement>('[data-show]').forEach((show) => {
@@ -165,16 +163,16 @@ document.querySelectorAll<HTMLElement>('[data-show]').forEach((show) => {
   const ipanels = [...show.querySelectorAll<HTMLElement>('[data-ipanel]')];
   const caps = [...show.querySelectorAll<HTMLElement>('[data-cap]')];
   tabSet(show, {
-    dur: 7500,
     tabs: [...show.querySelectorAll<HTMLElement>('[data-go]')],
     onChange: (n) => {
       panels.forEach((p, k) => {
         p.classList.toggle('on', k === n);
+        p.inert = k !== n;
         p.classList.remove('play');
         if (k === n) { void p.offsetWidth; p.classList.add('play'); }
       });
-      ipanels.forEach((p, k) => p.classList.toggle('on', k === n));
-      caps.forEach((c, k) => c.classList.toggle('on', k === n));
+      ipanels.forEach((p, k) => { p.classList.toggle('on', k === n); p.inert = k !== n; });
+      caps.forEach((c, k) => { c.classList.toggle('on', k === n); c.setAttribute('aria-hidden', String(k !== n)); });
     },
   });
   // gentle 3D tilt toward the cursor
@@ -237,5 +235,5 @@ if (giant && finePointer && !reduce) {
 }
 document.querySelector('[data-up]')?.addEventListener('click', (e) => {
   e.preventDefault();
-  window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+  scrollToSmooth(0);
 });

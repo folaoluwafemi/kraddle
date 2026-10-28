@@ -1,5 +1,6 @@
 ---
 import Logo from './Logo.astro';
+const hasWaitlist = !!import.meta.env.PUBLIC_WAITLIST_ENDPOINT?.trim();
 ---
 <header class="nav" data-nav>
   <div class="wrap row">
@@ -10,7 +11,7 @@ import Logo from './Logo.astro';
       <a class="link" href="#see">In practice</a>
       <a class="link" href="#faq">Questions</a>
     </nav>
-    <a class="btn small" href="#waitlist" data-magnetic>Join the waitlist</a>
+    <a class="btn small" href="#waitlist" data-magnetic>{hasWaitlist ? 'Join the waitlist' : 'Early access'}</a>
   </div>
   <div class="progress" aria-hidden="true"><span data-progress></span></div>
 </header>
@@ -18,17 +19,20 @@ import Logo from './Logo.astro';
 <style>
   .nav {
     position: sticky; top: env(safe-area-inset-top, 0px); z-index: 50;
-    background: color-mix(in srgb, var(--k-paper) 82%, transparent);
+    background: color-mix(in srgb, var(--k-paper) 96%, transparent);
     backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
     border-bottom: 1px solid transparent; transition: border-color .3s, transform .45s var(--ease);
   }
   .nav.scrolled { border-bottom-color: var(--k-line); }
-  .nav.tucked { transform: translateY(-100%); }
   .row { display: flex; align-items: center; justify-content: space-between; gap: 24px; height: 68px; }
   nav { display: flex; gap: 28px; font-size: 16px; color: var(--k-graphite); margin-left: auto; }
   nav a:hover { color: var(--k-ink); }
   .small { padding: 11px 16px; font-size: 15px; }
   .progress { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; pointer-events: none; }
   .progress span { display: block; height: 100%; width: 100%; background: var(--k-orange); transform-origin: 0 50%; transform: scaleX(var(--p, 0)); }
+  @supports ((animation-timeline: scroll()) and (animation-range: 0% 100%)) {
+    .progress span { animation: page-progress auto linear both; animation-timing-function: linear !important; animation-timeline: scroll(root); animation-range: 0% 100%; }
+    @keyframes page-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  }
   @media (max-width: 720px) { nav { display: none; } }
 </style>

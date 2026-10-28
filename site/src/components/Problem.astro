@@ -1,114 +1,372 @@
 ---
-import AssetSlot from './AssetSlot.astro';
 import Mark from './Mark.astro';
 
-const states = [
+const chapters = [
   {
-    step: 'Too little', word: 'Too little.', line: 'It guesses what you never said, and breaks what worked.',
-    asset: { kind: 'Illustration' as const, desc: 'An agent cheerfully saying “Done!” while, behind it, the checkout now shows the wrong price. Flat vector, ink lines, one orange accent.' },
+    step: 'The change', eyebrow: 'Too little context',
+    title: ['A small change.', 'An old problem.'],
+    body: 'Search works. But your active filter is gone, and paused projects are back in the list. The agent added what you asked for without knowing what you wanted to keep.',
+    quote: '“Wait. Where did my filters go?”',
+    outcome: 'Search added. Existing behavior lost.',
+    detail: 'The feature works on its own. The list no longer works the way you chose.',
   },
   {
-    step: 'Too much', word: 'Too much.', line: 'It drowns in everything, and forgets halfway through.',
-    asset: { kind: 'Illustration' as const, desc: 'A context window stuffed with hundreds of files, a meter at 98%, and the one instruction that mattered buried in the middle.' },
+    step: 'The explanation', eyebrow: 'Too much to sort through',
+    title: ['You explain.', 'Again.'],
+    body: 'You find the old chat. Paste your notes. Point to the rules. Now you’re reconstructing the reasoning behind a feature you’d already finished.',
+    quote: '“We already talked about this.”',
+    outcome: 'More context. The important choice is still buried.',
+    detail: 'Your decision is somewhere in the pile. Finding it becomes another task.',
   },
   {
-    step: 'Out of date', word: 'Out of date.', line: 'It follows what used to be true.',
-    asset: { kind: 'Illustration' as const, desc: 'A rules file last edited four months ago, next to code that has changed since. The agent follows the old rule.' },
+    step: 'The old choice', eyebrow: 'Context that fell behind',
+    title: ['It remembers', 'the old version.'],
+    body: 'The agent finds a sorting rule. Unfortunately, it’s the one you replaced last week. The filters return, but alphabetical order comes back with them.',
+    quote: '“We moved on from that.”',
+    outcome: 'A past decision returns as the current one.',
+    detail: 'The rule survived. The reason you changed it didn’t travel with it.',
   },
   {
-    step: 'Kraddle', word: 'Exactly enough.', line: 'What this step needs. Nothing more. That’s Kraddle.',
-    asset: { kind: 'Screenshot' as const, desc: 'Kraddle’s context card for one agent step: the four things this step needs, and 1,314 others skipped.' },
+    step: 'With Kraddle', eyebrow: 'The workflow we’re building',
+    title: ['The next feature.', 'Still your project.'],
+    body: 'The task starts with your current decisions and their reasons. The agent knows what to preserve, checks the change against it, and leaves the new questions visible.',
+    quote: 'A new feature. Less defending the old ones.',
+    outcome: 'Search added. Filters and sorting checked together.',
+    detail: 'The new “no results” screen is still an open question for you to review.',
   },
 ];
 ---
-<section class="problem stage-inv" id="why" data-morph-section data-state="0">
-  <div class="pin">
-    <div class="wrap grid">
-      <div class="text">
-        <p class="label" data-scramble>Why agents break what already worked</p>
 
-        <ol class="stepper" aria-label="Four kinds of context">
-          {states.map((s, i) => (
-            <li>
-              <button type="button" class={i === 0 ? 'on' : ''} data-tick={i} aria-current={i === 0 ? 'step' : undefined}>
-                <span class="num readout">{String(i + 1).padStart(2, '0')}</span>
-                <span class="nm">{i === 3 ? <><Mark /> Kraddle</> : s.step}</span>
-                <span class="fill" aria-hidden="true"><span></span></span>
-              </button>
-            </li>
-          ))}
-        </ol>
-
-        <div class="states">
-          {states.map((s, i) => (
-            <div class={`state${i === 0 ? ' on' : ''}`} data-state={i}>
-              <h2>{s.word}</h2>
-              <p>{s.line}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div class="viz">
-        <canvas data-morph aria-label="The Kraddle mark in dots, shown with too little, too much, out-of-date and exactly enough context"></canvas>
-        <div class="cards">
-          {states.map((s, i) => (
-            <div class={`card${i === 0 ? ' on' : ''}`} data-card={i}>
-              <AssetSlot kind={s.asset.kind} desc={s.asset.desc} ratio="4 / 3" />
-            </div>
-          ))}
-        </div>
-      </div>
+<section class="problem stage-inv" id="why" aria-labelledby="story-title" data-story>
+  <div class="wrap story-intro">
+    <div class="opening">
+      <p class="label">Why agents break what already worked</p>
+      <h2 id="story-title">Let’s say you wanted<br /><span>to add search.</span></h2>
+      <p class="intro-copy">Your projects list already works the way you like it. You just want a search box. So you ask your agent.</p>
+      <a class="follow" href="#story-0"><span class="follow-arrow" aria-hidden="true">↓</span><span>Follow the story<small>An illustrative story · four chapters</small></span></a>
     </div>
+    <aside class="setup" aria-label="The project before the change">
+      <p class="label">Before the change · your decisions</p>
+      <div class="setup-choice"><span class="chosen" aria-hidden="true">✓</span><div><b>Show active projects</b><p>So finished and paused work stay out of the way.</p></div></div>
+      <div class="setup-choice"><span class="chosen" aria-hidden="true">✓</span><div><b>Recently updated first</b><p>So you can pick up where you left off.</p></div></div>
+      <div class="task"><p class="label">The next thing you ask</p><p>“Add search to my projects.”</p></div>
+    </aside>
+  </div>
+
+  <div class="story-track" data-story-track>
+  <div class="story-pin">
+  <nav class="story-nav" aria-label="Story chapters">
+    <ol class="wrap chapter-links">
+      {chapters.map((c, i) => <li><a href={`#story-${i}`} data-chapter-link={i} aria-current={i === 0 ? 'location' : undefined} class={i === 0 ? 'on' : ''}>
+        <span class="readout chapter-number">{String(i + 1).padStart(2, '0')}</span>
+        <span>{i === 3 ? <><Mark /> {c.step}</> : c.step}</span>
+        <span class="chapter-line" aria-hidden="true"></span>
+      </a></li>)}
+    </ol>
+  </nav>
+
+  <div class="story-stage">
+  {chapters.map((c, i) => <article class={`chapter${i === 0 ? ' on' : ''}${i === 3 ? ' resolution' : ''}`} id={`story-${i}`} data-chapter={i} aria-labelledby={`chapter-title-${i}`}>
+    <div class="wrap chapter-grid" style={`--pan-start:${(i + .15) / 4 * 100}%;--pan-end:${(i + .75) / 4 * 100}%`}>
+      <div class="narrative">
+        <p class="chapter-label mono"><span>{String(i + 1).padStart(2, '0')} / 04</span>{c.eyebrow}</p>
+        <h3 id={`chapter-title-${i}`}>{c.title.map(line => <span>{line}</span>)}</h3>
+        <p class="chapter-copy">{c.body}</p>
+        <blockquote>{c.quote}</blockquote>
+      </div>
+
+      <figure class="scene">
+        <p class="scene-label mono">{i === 1 ? 'What you give the agent' : i === 3 ? 'What stays connected to the task' : 'What comes back'}<span>Illustrative scene</span></p>
+        <div class="window">
+          <div class="window-bar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span><span class="mono">{i === 1 ? 'context for this task' : 'my projects'}</span><span class="window-tag mono">{i === 1 ? 'notes + chats' : 'search'}</span></div>
+
+          {i === 1 ? <div class="context-pile">
+            <div class="document doc-one"><div class="doc-heading mono"><span>previous-session</span><span>chat</span></div><p>“Let’s start with alphabetical order…”</p><span class="document-line"></span><span class="document-line short"></span></div>
+            <div class="document doc-two"><div class="doc-heading mono"><span>product-notes.md</span><span>notes</span></div><p>Saved views, project cards, status labels…</p><span class="document-line"></span><span class="document-line short"></span></div>
+            <div class="document doc-three"><div class="doc-heading mono"><span>the choice that mattered</span><span>somewhere in here</span></div><p>Keep active filters when searching.</p><span class="document-line short"></span></div>
+            <p class="pile-note mono">You remember the decision.<br />Now you have to find it for the agent.</p>
+          </div> : <div class="project-list">
+            <div class="searchbox"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.5" /><path d="m13 13 4 4" stroke="currentColor" stroke-width="1.5" /></svg><span>launch</span><kbd class="mono" aria-hidden="true">↵</kbd></div>
+            <div class="filter-row"><span class={i === 0 ? 'missing' : 'chip'}>{i === 0 ? <><s>Status: active</s><small>removed</small></> : 'Status: active'}</span><span class={`sort${i === 2 ? ' old' : ''}`}>{i === 2 ? 'A → Z · old choice' : 'Recently updated'}</span></div>
+            <div class="project"><span class="project-icon" aria-hidden="true">{i === 2 ? 'LC' : 'LW'}</span><div><b>{i === 2 ? 'Launch checklist' : 'Launch website'}</b>{' '}<span>Active</span></div><small>{i === 2 ? '3 days ago' : '2 min ago'}</small></div>
+            <div class="project"><span class="project-icon" aria-hidden="true">{i === 2 ? 'LW' : 'LC'}</span><div><b>{i === 2 ? 'Launch website' : 'Launch checklist'}</b>{' '}<span>Active</span></div><small>{i === 2 ? '2 min ago' : '3 days ago'}</small></div>
+            {i === 0 && <div class="project unexpected"><span class="project-icon" aria-hidden="true">LA</span><div><b>Launch archive</b><span>Paused · shouldn’t appear here</span></div><small>last month</small></div>}
+          </div>}
+
+          {i === 3 && <div class="decisions">
+            <p class="mono decision-heading">Current decisions · carried into this task</p>
+            <div><span class="check" aria-hidden="true">✓</span><p><b>Search keeps active filters</b><small>Your decision · so paused work stays out of the way</small></p></div>
+            <div><span class="check" aria-hidden="true">✓</span><p><b>Recently updated comes first</b><small>Your decision · so you can resume your work</small></p></div>
+            <p class="verification mono">Checked: search + filters + sorting</p>
+          </div>}
+        </div>
+        <figcaption class={i === 3 ? 'success' : ''}><span class="outcome-mark" aria-hidden="true">{i === 3 ? '✓' : '↳'}</span><div><b>{c.outcome}</b><p>{c.detail}</p></div></figcaption>
+      </figure>
+    </div>
+    {i < 3 && <div class="wrap chapter-next"><a href={`#story-${i + 1}`}>Next: {chapters[i + 1].step}<span aria-hidden="true">↓</span></a></div>}
+  </article>)}
+  </div>
+  </div>
   </div>
 </section>
 
 <style>
-  .problem { height: 440vh; position: relative; transition: background-color .7s var(--ease), color .7s var(--ease); }
-  .problem[data-state="3"] {
-    background: var(--k-orange); color: #121212;
-    --inv-fg: #121212; --inv-muted: #3A1A0C; --inv-line: rgba(18,18,18,.25); --k-ink: #121212; --k-graphite: #3A1A0C;
-    --slot-bg: #F8F8F6; --slot-fg: #121212; --slot-line: #121212;
+  .problem { --story-accent: var(--k-orange); --story-muted: var(--inv-muted); position: relative; }
+  .story-intro { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: clamp(48px, 7vw, 104px); padding-block: clamp(96px, 10vw, 148px) 96px; align-items: start; }
+  .opening { display: flex; flex-direction: column; align-items: flex-start; gap: 28px; }
+  .opening .label { color: var(--story-muted); }
+  .opening h2 { font-size: clamp(48px, 5.5vw, 78px); line-height: 1.04; letter-spacing: -.035em; }
+  .opening h2 span { color: var(--story-accent); }
+  .intro-copy { font-size: clamp(20px, 1.8vw, 24px); color: var(--story-muted); max-width: 34ch; }
+  .follow { display: inline-flex; align-items: center; gap: 16px; margin-top: 8px; text-decoration: none; font-size: 17px; }
+  .follow-arrow { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--inv-line); border-radius: 50%; font-size: 24px; transition: transform .3s var(--ease); }
+  .follow:hover .follow-arrow { transform: translateY(4px); }
+  .follow small { display: block; font: 11px var(--k-font-mono); color: var(--story-muted); margin-top: 5px; }
+  .setup { border-top: 1px solid var(--inv-line); padding-top: 24px; margin-top: 4px; }
+  .setup > .label { color: var(--story-muted); margin-bottom: 24px; }
+  .setup-choice { display: flex; align-items: flex-start; gap: 14px; padding-block: 18px; border-bottom: 1px solid var(--inv-line); }
+  .chosen { color: var(--story-accent); font-size: 20px; }
+  .setup-choice b { font-size: 20px; font-weight: 500; }
+  .setup-choice p { font-size: 16px; color: var(--story-muted); margin-top: 6px; max-width: 29ch; }
+  .task { margin-top: 28px; padding: 24px; background: var(--inv-surface); border: 1px solid var(--inv-line); border-left: 3px solid var(--story-accent); }
+  .task .label { color: var(--story-muted); margin-bottom: 10px; }
+  .task > p:last-child { font-size: clamp(20px, 2vw, 25px); }
+
+  .story-nav { position: sticky; top: calc(var(--header-height) + env(safe-area-inset-top, 0px)); z-index: 20; background: var(--inv-bg); border-block: 1px solid var(--inv-line); box-shadow: 0 8px 20px -14px rgba(0,0,0,.4); }
+  .chapter-links { list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: clamp(16px, 3vw, 40px); margin-block: 0; padding-block: 20px; }
+  .chapter-links a { position: relative; display: flex; align-items: center; gap: 14px; min-height: 42px; color: var(--story-muted); text-decoration: none; font-size: 15px; padding-bottom: 12px; }
+  .chapter-links a.on, .chapter-links a:hover { color: var(--inv-fg); }
+  .chapter-number { font-size: 24px; flex: none; }
+  .chapter-links a.on .chapter-number { color: var(--story-accent); }
+  .chapter-links a > span:nth-child(2) { display: inline-flex; align-items: center; gap: 7px; }
+  .chapter-links :global(.mark) { width: 13px; height: auto; }
+  .chapter-line { position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: var(--inv-line); }
+  .chapter-line::after { content: ''; position: absolute; inset: 0; background: var(--story-accent); transform: scaleX(0); transform-origin: left; transition: transform .3s var(--ease); }
+  .chapter-links a.on .chapter-line::after, .chapter-links a.passed .chapter-line::after { transform: scaleX(1); }
+
+  .chapter { padding-block: clamp(80px, 8vw, 120px); border-bottom: 1px solid var(--inv-line); scroll-margin-top: 100px; }
+  .chapter-grid { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); gap: clamp(40px, 6vw, 88px); align-items: start; }
+  .narrative { display: flex; flex-direction: column; gap: 26px; padding-top: 28px; }
+  .chapter-label, .scene-label { font-size: 10px; line-height: 1.6; letter-spacing: .08em; text-transform: uppercase; color: var(--story-muted); min-height: 18px; }
+  .chapter-label { display: flex; flex-wrap: wrap; gap: 12px; }
+  .chapter-label > span { color: var(--story-accent); }
+  .narrative h3 { font-size: clamp(42px, 4.4vw, 64px); line-height: 1.04; letter-spacing: -.035em; }
+  .narrative h3 > span { display: block; }
+  .chapter-copy { font-size: clamp(19px, 1.7vw, 23px); color: var(--story-muted); max-width: 35ch; }
+  blockquote { margin: 12px 0 0; padding-left: 20px; border-left: 2px solid var(--story-accent); font-size: clamp(22px, 2.2vw, 28px); line-height: 1.35; max-width: 26ch; }
+  .scene { --story-muted: #65655B; --story-accent: #B83C0C; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 26px; padding: 28px; color: #121212; background: #F3F3ED; border: 1px solid #D4D4C9; border-radius: 18px; box-shadow: 0 32px 72px -28px rgba(0,0,0,.45), 0 4px 12px -5px rgba(0,0,0,.16); }
+  .scene-label { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; }
+  .scene-label > span { letter-spacing: 0; text-transform: none; opacity: .8; }
+  .window { background: #FBFBF9; color: #121212; border: 1px solid #C9C9C0; border-radius: 12px; overflow: hidden; box-shadow: 0 24px 64px -40px rgba(0,0,0,.55); }
+  .window-bar { display: flex; align-items: center; gap: 16px; padding: 18px 22px; border-bottom: 1px solid #DEDED6; background: #F0F0EA; font-size: 11px; }
+  .window-bar > span:nth-child(2) { margin-inline: auto; }
+  .lights { display: flex; gap: 6px; }
+  .lights i { width: 7px; height: 7px; border-radius: 50%; background: #AAA99E; }
+  .window-tag { font-size: 10px; color: #66665B; }
+  .project-list { padding: 24px; }
+  .searchbox { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border: 1px solid #BABAAE; border-radius: 6px; font-size: 18px; color: #56564D; }
+  .searchbox kbd { margin-left: auto; font-size: 13px; color: #AAA99E; }
+  .filter-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; padding-block: 20px; font-size: 12px; }
+  .chip { padding: 5px 9px; background: #E8EEE6; border: 1px solid #B4C3AF; border-radius: 4px; }
+  .missing { display: inline-flex; align-items: center; gap: 8px; padding: 5px 8px; border: 1px dashed #B8410F; color: #963809; }
+  .missing small { font-size: 10px; }
+  .sort { color: #66665B; }
+  .sort.old { color: #963809; }
+  .project { display: flex; align-items: center; gap: 12px; padding-block: 17px; border-top: 1px solid #E0E0D8; }
+  .project-icon { display: grid; place-items: center; width: 34px; height: 34px; flex: none; background: #EEEDE6; border: 1px solid #DBDACF; border-radius: 6px; font: 10px var(--k-font-mono); color: #66665B; }
+  .project b { display: block; font-size: 15px; font-weight: 500; }
+  .project div > span { font-size: 11px; color: #66665B; }
+  .project > small { margin-left: auto; flex: none; color: #77776B; font-size: 10px; }
+  .unexpected { margin-inline: -12px; padding-inline: 12px; background: #FFF0E8; border-block: 1px dashed #E0BAA5; border-radius: 4px; }
+  .unexpected div > span { color: #963809; }
+  .context-pile { padding: 28px 24px 24px; }
+  .document { position: relative; padding: 20px; background: #F7F7F2; border: 1px solid #D1D1C5; box-shadow: 0 8px 22px -16px #121212; }
+  .doc-heading { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 5px; font-size: 9px; color: #77776B; margin-bottom: 12px; }
+  .document p { font-size: 14px; line-height: 1.5; }
+  .document-line { display: block; width: 80%; height: 4px; margin-top: 12px; background: #DEDED4; }
+  .document-line.short { width: 53%; margin-top: 7px; }
+  .doc-one { transform: rotate(-2deg); margin-right: 22px; }
+  .doc-two { transform: rotate(1deg); margin: -22px 0 0 22px; }
+  .doc-three { margin: -18px 12px 0 8px; background: #EBEBE2; }
+  .doc-three p { color: #66665B; }
+  .pile-note { margin-top: 24px; font-size: 11px; color: #77776B; }
+  .decisions { padding: 22px 24px; border-top: 1px solid #DADAD4; background: #EFF4EB; }
+  .decision-heading { font-size: 9px; color: #46613C; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 14px; }
+  .decisions > div { display: flex; align-items: flex-start; gap: 10px; padding-block: 7px; }
+  .check { color: #2B663C; font-size: 15px; }
+  .decisions b { display: block; font-size: 13px; font-weight: 500; }
+  .decisions small { display: block; font-size: 10px; color: #565E50; margin-top: 3px; }
+  .verification { padding-top: 14px; margin-top: 10px; border-top: 1px solid #D3DECC; font-size: 10px; color: #2B663C; }
+  figcaption { display: flex; align-items: flex-start; gap: 12px; }
+  .outcome-mark { color: var(--story-accent); font-size: 22px; line-height: 1.25; flex: none; }
+  figcaption b { font-size: 16px; line-height: 1.4; font-weight: 500; display: block; }
+  figcaption p { font-size: 14px; color: var(--story-muted); margin-top: 7px; max-width: 43ch; }
+  .chapter-next { margin-top: 44px; }
+  .chapter-next a { display: inline-flex; align-items: center; gap: 18px; text-decoration: none; color: var(--story-muted); font-size: 12px; }
+  .chapter-next a:hover { color: var(--inv-fg); }
+  .chapter-next a > span { color: var(--story-accent); font-size: 20px; }
+  .resolution { background: var(--k-orange); color: #121212; --story-muted: #3A1A0C; --story-accent: #121212; --inv-line: rgba(18,18,18,.2); --inv-fg: #121212; }
+
+  .story-track { --story-height: calc(100svh - var(--header-height) - env(safe-area-inset-top, 0px)); --story-distance: max(420px, 85svh); }
+  .story-track.is-pinned { height: calc(var(--story-height) + 4 * var(--story-distance)); }
+  .is-pinned .story-pin { height: var(--story-height); position: sticky; top: calc(var(--header-height) + env(safe-area-inset-top, 0px)); display: flex; flex-direction: column; background: var(--inv-bg); }
+  .is-pinned .story-nav { position: relative; top: auto; flex: none; }
+  .is-pinned .chapter-links { padding-block: 12px; }
+  .is-pinned .story-stage { display: grid; grid-template-rows: minmax(0, 1fr); flex: 1; min-height: 0; overflow: hidden; }
+  .is-pinned .chapter { grid-area: 1 / 1; min-height: 0; padding-block: 20px; border: 0; display: flex; align-items: center; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .7s var(--ease); }
+  .is-pinned .chapter.on { opacity: 1; visibility: visible; pointer-events: auto; }
+  .is-pinned .chapter-grid { width: 100%; gap: clamp(28px, 4vw, 56px); transform: translateY(var(--chapter-pan, 0px)); }
+  .is-pinned .chapter.is-tall { align-items: flex-start; }
+  @supports ((animation-timeline: scroll()) and (animation-range: 0% 100%) and (view-timeline-inset: 1px)) {
+    .story-track.is-pinned { view-timeline: --story-travel block; view-timeline-inset: calc(var(--header-height) + env(safe-area-inset-top, 0px)) 0; }
+    .is-pinned .chapter-grid { animation: chapter-travel auto var(--ease) both; animation-timeline: --story-travel; animation-range: contain var(--pan-start) contain var(--pan-end); }
+    @keyframes chapter-travel { from { transform: translateY(0); } to { transform: translateY(calc(-1 * var(--chapter-overflow, 0px))); } }
   }
-  .pin { position: sticky; top: 0; height: 100svh; display: flex; align-items: center; overflow: hidden; }
-  .grid { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(32px, 5vw, 80px); align-items: center; }
-  .text { display: flex; flex-direction: column; gap: 28px; }
-  .label { color: var(--inv-muted); }
+  .is-pinned .narrative { gap: 18px; padding-top: 20px; }
+  .is-pinned .narrative h3 { font-size: clamp(34px, 3.8vw, 54px); }
+  .is-pinned .chapter-copy { font-size: clamp(16px, 1.45vw, 19px); }
+  .is-pinned blockquote { font-size: clamp(18px, 1.9vw, 24px); margin-top: 4px; }
+  .is-pinned .scene { padding: 16px; gap: 12px; }
+  .is-pinned .scene-label, .is-pinned .chapter-label { font-size: 9px; }
+  .is-pinned .window-bar { padding: 9px 16px; }
+  .is-pinned .project-list { padding: 16px; }
+  .is-pinned .searchbox { padding: 9px 12px; font-size: 16px; }
+  .is-pinned .filter-row { padding-block: 10px; font-size: 11px; }
+  .is-pinned .project { padding-block: 7px; }
+  .is-pinned .project div { font-size: 13px; line-height: 1.3; }
+  .is-pinned .chip, .is-pinned .missing { line-height: 1.3; padding-block: 4px; }
+  .is-pinned .decisions > div > p { font-size: 11px; line-height: 1.3; }
+  .is-pinned .project-icon { width: 26px; height: 28px; }
+  .is-pinned .project b { font-size: 13px; }
+  .is-pinned .project div > span { font-size: 10px; }
+  .is-pinned .decisions { padding: 14px 16px; }
+  .is-pinned .decision-heading { font-size: 8px; margin-bottom: 8px; }
+  .is-pinned .decisions > div { padding-block: 3px; font-size: 11px; }
+  .is-pinned .decisions b { font-size: 11px; line-height: 1.2; }
+  .is-pinned .decisions small { font-size: 9px; line-height: 1.3; margin-top: 1px; }
+  .is-pinned .verification { font-size: 9px; padding-top: 8px; margin-top: 8px; }
+  .is-pinned figcaption b { font-size: 14px; }
+  .is-pinned figcaption p { font-size: 12px; margin-top: 4px; }
+  .is-pinned .context-pile { padding: 20px 16px; }
+  .is-pinned .document { padding: 14px; }
+  .is-pinned .pile-note { margin-top: 16px; }
+  .is-pinned .chapter-next { display: none; }
 
-  .stepper { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-  .stepper button { all: unset; box-sizing: border-box; cursor: pointer; width: 100%; display: flex; flex-direction: column; gap: 6px; padding: 4px 0 0; color: var(--inv-muted); transition: color .3s; }
-  .stepper button:hover, .stepper button.on { color: var(--inv-fg); }
-  .stepper button:focus-visible { outline: 2px solid var(--k-orange); outline-offset: 4px; }
-  .num { font-size: 20px; }
-  .nm { font-family: var(--k-font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-  .nm :global(.mark) { width: 11px; height: auto; overflow: visible; }
-  .fill { display: block; height: 3px; background: var(--inv-line); position: relative; overflow: hidden; }
-  .fill span { position: absolute; inset: 0; background: var(--k-orange); transform-origin: 0 50%; transform: scaleX(var(--p, 0)); }
-  .problem[data-state="3"] .fill span { background: #121212; }
-  li:last-child .num { color: var(--k-orange); }
-  .problem[data-state="3"] li:last-child .num { color: #121212; }
-
-  .states { position: relative; min-height: clamp(210px, 24vw, 300px); }
-  .state { position: absolute; inset: 0 auto auto 0; display: flex; flex-direction: column; gap: 18px; opacity: 0; transform: translateY(24px); transition: opacity .5s var(--ease), transform .7s var(--ease); pointer-events: none; }
-  .state.on { opacity: 1; transform: none; }
-  .state.gone { transform: translateY(-24px); }
-  .state h2 { font-size: clamp(52px, 7.6vw, 116px); line-height: .95; letter-spacing: -.04em; }
-  .state p { font-size: clamp(20px, 2vw, 26px); color: var(--inv-muted); max-width: 26ch; }
-  .state[data-state="3"] p { color: #121212; }
-
-  .viz { position: relative; width: 100%; max-width: 560px; justify-self: center; aspect-ratio: 1 / 1; }
-  canvas { width: 100%; height: 100%; color: var(--inv-fg); --field-faint: var(--inv-muted); --field-hot: var(--k-orange); }
-  .problem[data-state="3"] canvas { --field-hot: #F8F8F6; }
-  .cards { position: absolute; left: -12%; bottom: -6%; width: 58%; }
-  .card { position: absolute; left: 0; bottom: 0; width: 100%; opacity: 0; transform: translateY(20px) rotate(-3deg) scale(.96); transition: opacity .5s var(--ease), transform .7s var(--ease); box-shadow: 0 30px 60px -30px rgba(0,0,0,.55); pointer-events: none; }
-  .card.on { opacity: 1; transform: rotate(-2deg); pointer-events: auto; }
-  .card.on:hover { transform: rotate(0deg) translateY(-6px) scale(1.03); }
-
-  @media (max-width: 860px) {
-    .grid { grid-template-columns: 1fr; gap: 16px; }
-    .viz { order: -1; max-width: 260px; }
-    .cards { display: none; }
-    .states { min-height: 190px; }
-    .nm { font-size: 9.5px; }
+  @media (max-width: 1000px) {
+    .story-intro { grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 40px; }
+    .chapter-grid { gap: 36px; }
+    .chapter-links a { gap: 9px; font-size: 13px; }
+    .scene-label > span { display: none; }
+    .project-list, .decisions { padding: 20px; }
   }
+  @media (max-width: 700px) {
+    .story-intro { grid-template-columns: 1fr; gap: 48px; padding-block: 88px 64px; }
+    .opening h2 { font-size: clamp(42px, 8.5vw, 58px); }
+    .opening { gap: 24px; }
+    .intro-copy { font-size: 20px; }
+    .setup { margin-top: 0; }
+    .setup-choice { padding-block: 15px; }
+    .setup-choice p { max-width: none; }
+    .chapter-links { gap: 12px; padding-block: 14px; }
+    .chapter-links a { flex-direction: column; align-items: flex-start; gap: 7px; font-size: 10px; line-height: 1.4; }
+    .chapter-number { font-size: 20px; }
+    .chapter-links a > span:nth-child(2) { gap: 4px; }
+    .chapter-links :global(.mark) { width: 9px; }
+    .chapter { padding-block: 64px; scroll-margin-top: 120px; }
+    .chapter-grid { grid-template-columns: 1fr; gap: 40px; }
+    .narrative { gap: 22px; padding-top: 0; }
+    .narrative h3 { font-size: clamp(40px, 9vw, 54px); }
+    .chapter-copy { font-size: 19px; max-width: 38ch; }
+    blockquote { font-size: 23px; margin-top: 4px; }
+    .scene { gap: 20px; padding: 18px; border-radius: 14px; }
+    .scene-label > span { display: inline; }
+    .window-bar { padding: 16px; gap: 10px; }
+    .project-list, .decisions { padding: 18px; }
+    .project { gap: 10px; }
+    .project b { font-size: 14px; }
+    .project-icon { width: 30px; height: 32px; }
+    .unexpected div > span { font-size: 10px; }
+    .context-pile { padding: 28px 18px 22px; }
+    .chapter-next { margin-top: 36px; }
+  }
+  @media (max-height: 620px) { .chapter-links { padding-block: 10px; } .chapter-links a { min-height: 30px; } }
+  @media (max-width: 700px) {
+    .is-pinned .chapter { padding-block: 14px; }
+    .is-pinned .chapter-grid { gap: 20px; }
+    .is-pinned .narrative { gap: 10px; padding-top: 0; }
+    .is-pinned .narrative h3 { font-size: 32px; }
+    .is-pinned .chapter-copy { font-size: 14px; line-height: 1.45; }
+    .is-pinned blockquote { font-size: 16px; max-width: none; }
+    .is-pinned .scene { padding: 12px; gap: 10px; }
+    .is-pinned .scene-label > span { display: none; }
+    .is-pinned .window-bar { padding: 6px 12px; font-size: 9px; }
+    .is-pinned .project-list, .is-pinned .decisions { padding: 12px; }
+    .is-pinned .project { padding-block: 4px; }
+    .is-pinned .project div > span { display: inline; margin-left: 6px; }
+    .is-pinned .project b { display: inline; font-size: 12px; }
+    .is-pinned .project-icon { display: none; }
+    .is-pinned .searchbox { padding: 7px 10px; font-size: 14px; }
+    .is-pinned .filter-row { padding-block: 9px; }
+    .is-pinned .decisions > div { padding-block: 2px; }
+    .is-pinned .decisions small { margin-top: 0; }
+    .is-pinned .decision-heading { margin-bottom: 4px; }
+    .is-pinned .verification { padding-top: 5px; margin-top: 5px; }
+    .is-pinned figcaption { gap: 8px; }
+    .is-pinned figcaption b { font-size: 12px; }
+    .is-pinned figcaption p { font-size: 10px; }
+    .is-pinned .context-pile { padding: 14px 12px; }
+    .is-pinned .document { padding: 9px; }
+    .is-pinned .doc-heading { font-size: 7px; margin-bottom: 6px; }
+    .is-pinned .document p { font-size: 11px; }
+    .is-pinned .document-line { height: 3px; margin-top: 6px; }
+    .is-pinned .document-line.short { margin-top: 4px; }
+    .is-pinned .pile-note { font-size: 10px; margin-top: 12px; }
+  }
+  @media (max-height: 620px) and (min-width: 601px) {
+    .is-pinned .chapter-links { padding-block: 8px; }
+    .is-pinned .chapter-links a { min-height: 28px; padding-bottom: 7px; font-size: 11px; flex-direction: row; }
+    .is-pinned .chapter-number { font-size: 18px; }
+    .is-pinned .chapter { padding-block: 12px; }
+    .is-pinned .chapter-grid { grid-template-columns: minmax(0,.85fr) minmax(0,1.15fr); gap: 24px; }
+    .is-pinned .narrative { gap: 10px; padding-top: 10px; }
+    .is-pinned .narrative h3 { font-size: 28px; }
+    .is-pinned .chapter-copy { font-size: 13px; line-height: 1.4; }
+    .is-pinned blockquote { font-size: 16px; padding-left: 12px; }
+    .is-pinned .scene { padding: 8px; gap: 6px; border-radius: 10px; }
+    .is-pinned .scene-label { font-size: 8px; min-height: 12px; }
+    .is-pinned .window { border-radius: 6px; }
+    .is-pinned .window-bar { padding: 4px 10px; font-size: 9px; }
+    .is-pinned .window-tag { font-size: 8px; }
+    .is-pinned .project-list { padding: 10px; }
+    .is-pinned .searchbox { padding: 4px 8px; font-size: 12px; }
+    .is-pinned .filter-row { padding-block: 6px; font-size: 9px; }
+    .is-pinned .chip, .is-pinned .missing { padding: 3px 5px; }
+    .is-pinned .project { padding-block: 4px; gap: 6px; }
+    .is-pinned .project-icon { display: none; }
+    .is-pinned .project div { font-size: 10px; line-height: 1.2; }
+    .is-pinned .project b { font-size: 10px; display: inline; }
+    .is-pinned .project div > span { display: inline; margin-left: 5px; }
+    .is-pinned .project div > span, .is-pinned .project > small { font-size: 8px; }
+    .is-pinned .resolution .window { display: grid; grid-template-columns: 1fr 1fr; }
+    .is-pinned .resolution .window-bar { grid-column: 1 / -1; }
+    .is-pinned .decisions { padding: 10px; border-top: 0; border-left: 1px solid #DADAD4; }
+    .is-pinned .decision-heading { font-size: 7px; }
+    .is-pinned .decisions b { font-size: 9px; }
+    .is-pinned .decisions small, .is-pinned .verification { font-size: 8px; }
+    .is-pinned .decisions > div { gap: 5px; padding-block: 2px; }
+    .is-pinned figcaption b { font-size: 11px; }
+    .is-pinned figcaption p { font-size: 9px; max-width: none; }
+    .is-pinned .context-pile { padding: 8px; }
+    .is-pinned .document { padding: 5px; }
+    .is-pinned .document p { font-size: 10px; }
+    .is-pinned .doc-heading { font-size: 7px; margin-bottom: 5px; }
+    .is-pinned .document-line { height: 2px; margin-top: 5px; }
+    .is-pinned .document-line { display: none; }
+    .is-pinned .doc-two { margin-top: -16px; }
+    .is-pinned .doc-three { margin-top: -14px; }
+    .is-pinned .pile-note { margin-top: 8px; font-size: 7px; }
+  }
+  @media (prefers-color-scheme: dark) { :global(:root:not([data-theme="light"])) .problem { --story-accent: #C4420E; } }
+  :global(:root[data-theme="dark"]) .problem { --story-accent: #C4420E; }
+  @media (prefers-reduced-motion: reduce) { .document { transform: none; } }
 </style>
